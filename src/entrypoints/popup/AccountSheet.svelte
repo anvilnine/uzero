@@ -74,6 +74,7 @@
   }}
 >
   <div class="inner">
+    <span class="handle" aria-hidden="true"></span>
     <header>
       <Avatar
         name={row.name}
@@ -94,7 +95,7 @@
 
     {#if row.inactive}
       <p class="note">
-        Signed out. Sign back in at accounts.google.com to open apps as this account.
+        Signed out. Sign in again at accounts.google.com to open apps as this account.
       </p>
     {:else if shown.length}
       <section aria-labelledby="open-h">
@@ -134,22 +135,22 @@
       <div class="moves">
         <button
           type="button"
-          class="btn btn-quiet"
+          class="btn btn-text"
           disabled={row.slot === 1}
           onclick={() => onmove(-1)}
         >
-          <Icon name="up" size={18} /> Move up
+          Move up
         </button>
         <button
           type="button"
-          class="btn btn-quiet"
+          class="btn btn-text"
           disabled={row.slot === total}
           onclick={() => onmove(1)}
         >
-          <Icon name="down" size={18} /> Move down
+          Move down
         </button>
       </div>
-      <button type="button" class="btn btn-quiet" onclick={() => openOptions()}>
+      <button type="button" class="btn btn-text" onclick={() => openOptions()}>
         Settings
       </button>
     </footer>
@@ -162,24 +163,24 @@
     inset: auto 0 0 0;
     width: 100%;
     max-width: 100%;
-    max-height: calc(100% - 40px);
+    max-height: calc(100% - 32px);
     margin: 0;
     padding: 0;
     border: 0;
     border-radius: var(--r-xl) var(--r-xl) 0 0;
-    background: var(--sheet-raised);
-    color: var(--ink);
-    box-shadow: var(--shadow-pop);
+    background: var(--surface-container-low);
+    color: var(--on-surface);
+    box-shadow: var(--shadow-menu);
     overflow: auto;
-    animation: rise 220ms var(--ease);
+    animation: rise 200ms var(--ease);
   }
   .sheet::backdrop {
-    background: rgb(10 16 14 / 0.38);
-    animation: fade 220ms var(--ease);
+    background: rgb(0 0 0 / 0.32);
+    animation: fade 200ms var(--ease);
   }
   @keyframes rise {
     from {
-      transform: translateY(24px);
+      transform: translateY(16px);
       opacity: 0;
     }
   }
@@ -189,14 +190,22 @@
     }
   }
   .inner {
-    padding: 16px 16px 12px;
+    padding: 8px 16px 8px;
     display: grid;
     gap: 16px;
+  }
+  .handle {
+    justify-self: center;
+    width: 32px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--outline-variant);
   }
   header {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-right: -8px;
   }
   .who {
     flex: 1;
@@ -205,13 +214,14 @@
   h2 {
     margin: 0;
     font-size: var(--t-lg);
-    font-weight: 650;
-    letter-spacing: -0.01em;
+    font-weight: 400;
+    line-height: 24px;
   }
   .who p {
-    margin: 1px 0 0;
-    color: var(--ink-2);
+    margin: 0;
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
+    line-height: 16px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -222,66 +232,41 @@
   }
   h3 {
     margin: 0;
-    font-size: var(--t-sm);
-    font-weight: 600;
-    color: var(--ink-2);
+    font-size: var(--t-md);
+    font-weight: 500;
   }
   .apps {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .app {
-    min-height: 36px;
-    padding: 0 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--sheet);
-    font-size: var(--t-sm);
-    font-weight: 550;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--on-surface-variant);
+    font-size: var(--t-md);
+    font-weight: 500;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    transition: background-color var(--dur) var(--ease);
   }
   .app:hover {
-    border-color: var(--ink-3);
-    background: var(--sheet-raised);
-  }
-  .field {
-    width: 100%;
-    height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-md);
-    background: var(--sheet);
-  }
-  .field::placeholder {
-    color: var(--ink-3);
-  }
-  .field:focus-visible {
-    outline-offset: 0;
-    border-color: var(--focus);
+    background: var(--hover);
   }
   .note {
     margin: 0;
-    padding: 10px 12px;
-    border-radius: var(--r-md);
-    background: var(--sunk);
-    color: var(--ink-2);
-    font-size: var(--t-sm);
+    color: var(--on-surface-variant);
   }
   footer {
     display: flex;
     justify-content: space-between;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--outline-variant);
     padding-top: 8px;
     margin: 0 -8px;
   }
   .moves {
     display: flex;
-  }
-  footer .btn {
-    padding: 0 10px;
-    font-size: var(--t-sm);
   }
 </style>

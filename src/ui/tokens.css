@@ -1,116 +1,95 @@
 /*
-  Lineup design tokens.
-  Direction: a quiet "running order" sheet. Cool sage paper, green-black ink,
-  serif ordinals in the gutter, and one jersey-yellow mark for your #1.
+  Lineup design tokens. Material 3 roles with Google's own values, so the extension sits
+  quietly next to Google's account menu and sign-in pages. System fonts only.
 */
 
 :root {
   color-scheme: light dark;
 
-  /* Surfaces */
-  --paper: #eef1ec;
-  --sheet: #fbfcfa;
-  --sheet-raised: #ffffff;
-  --sunk: #e4e9e2;
-  --line: #d9dfd6;
-  --line-strong: #c3ccc0;
+  --surface: #ffffff;
+  --surface-container-low: #f8fafd;
+  --surface-container: #f0f4f9;
+  --surface-container-high: #e9eef6;
+  --surface-container-highest: #dde3ea;
+  --on-surface: #1f1f1f;
+  --on-surface-variant: #444746;
+  --outline: #747775;
+  --outline-variant: #c4c7c5;
 
-  /* Ink */
-  --ink: #17221e;
-  --ink-2: #4c5953;
-  --ink-3: #78847e;
-  --ink-inverse: #f4f7f2;
+  --primary: #0b57d0;
+  --on-primary: #ffffff;
+  --primary-container: #d3e3fd;
+  --on-primary-container: #041e49;
 
-  /* The one accent: the leader's jersey */
-  --jersey: #f2c230;
-  --jersey-soft: #fbedb9;
-  --jersey-ink: #3d3000;
+  --error: #b3261e;
+  --inverse-surface: #303030;
+  --inverse-on-surface: #f2f2f2;
 
-  /* Function */
-  --action: #17221e;
-  --action-hover: #2a3a34;
-  --on-action: #f4f7f2;
-  --toggle-on: #17221e;
-  --focus: #1d7a63;
-  --ok: #23845c;
-  --danger: #b3261e;
-  --danger-soft: #fbe4e1;
-  --warn-soft: #fbf1d4;
+  /* Hover / pressed state layers are tints of the content color. */
+  --hover: color-mix(in srgb, var(--on-surface) 8%, transparent);
+  --pressed: color-mix(in srgb, var(--on-surface) 12%, transparent);
 
-  --shadow-lift: 0 1px 2px rgb(23 34 30 / 0.08), 0 10px 28px -6px rgb(23 34 30 / 0.22);
-  --shadow-pop: 0 1px 1px rgb(23 34 30 / 0.06), 0 18px 40px -10px rgb(23 34 30 / 0.28);
+  --shadow-menu: 0 1px 3px rgb(0 0 0 / 0.15), 0 4px 8px 3px rgb(0 0 0 / 0.08);
 
-  /* Label tones */
-  --tone-slate: #64748b;
-  --tone-red: #d24646;
-  --tone-orange: #de7a2c;
-  --tone-amber: #c99412;
-  --tone-green: #2c9a58;
-  --tone-teal: #1b968d;
-  --tone-blue: #3a72d6;
-  --tone-violet: #7857d4;
-  --tone-pink: #cf4d8c;
+  /* Label colors: Google's palette, shown only as small dots and initials. */
+  --tone-slate: #5f6368;
+  --tone-red: #d93025;
+  --tone-orange: #fa7b17;
+  --tone-amber: #f2a600;
+  --tone-green: #188038;
+  --tone-teal: #007b83;
+  --tone-blue: #1a73e8;
+  --tone-violet: #9334e6;
+  --tone-pink: #d01884;
 
-  /* Type */
-  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-figure: 'Iowan Old Style', 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  --font: 'Google Sans', 'Google Sans Text', Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --t-xs: 11px;
-  --t-sm: 12.5px;
+  --t-sm: 12px;
   --t-md: 14px;
   --t-lg: 16px;
-  --t-xl: 21px;
-  --t-2xl: 30px;
+  --t-xl: 24px;
 
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 28px;
 
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 150ms;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #121816;
-    --sheet: #19211e;
-    --sheet-raised: #212a26;
-    --sunk: #0e1312;
-    --line: #29332f;
-    --line-strong: #3a4641;
+    --surface: #131314;
+    --surface-container-low: #1b1b1b;
+    --surface-container: #1e1f20;
+    --surface-container-high: #282a2c;
+    --surface-container-highest: #333537;
+    --on-surface: #e3e3e3;
+    --on-surface-variant: #c4c7c5;
+    --outline: #8e918f;
+    --outline-variant: #444746;
 
-    --ink: #e5ebe6;
-    --ink-2: #a8b3ad;
-    --ink-3: #75817b;
-    --ink-inverse: #121816;
+    --primary: #a8c7fa;
+    --on-primary: #062e6f;
+    --primary-container: #0842a0;
+    --on-primary-container: #d3e3fd;
 
-    --jersey: #f4c840;
-    --jersey-soft: #3a3317;
-    --jersey-ink: #2a2100;
+    --error: #f2b8b5;
+    --inverse-surface: #e3e3e3;
+    --inverse-on-surface: #303030;
 
-    --action: #e5ebe6;
-    --action-hover: #ffffff;
-    --on-action: #121816;
-    --toggle-on: #4a5a53;
-    --focus: #6fd3b5;
-    --ok: #5cc995;
-    --danger: #ff8a80;
-    --danger-soft: #3a1f1d;
-    --warn-soft: #332c15;
+    --shadow-menu: 0 1px 3px rgb(0 0 0 / 0.4), 0 4px 8px 3px rgb(0 0 0 / 0.25);
 
-    --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 30px -6px rgb(0 0 0 / 0.6);
-    --shadow-pop: 0 1px 1px rgb(0 0 0 / 0.4), 0 20px 44px -10px rgb(0 0 0 / 0.7);
-
-    --tone-slate: #94a3b8;
-    --tone-red: #f07575;
-    --tone-orange: #f29a55;
-    --tone-amber: #e5b93b;
-    --tone-green: #5cc98a;
-    --tone-teal: #4cc4b9;
-    --tone-blue: #75a1f0;
-    --tone-violet: #a68cf0;
-    --tone-pink: #ef80b5;
+    --tone-slate: #9aa0a6;
+    --tone-red: #f28b82;
+    --tone-orange: #fcad70;
+    --tone-amber: #fdd663;
+    --tone-green: #81c995;
+    --tone-teal: #78d9ec;
+    --tone-blue: #8ab4f8;
+    --tone-violet: #c58af9;
+    --tone-pink: #ff8bcb;
   }
 }
 
@@ -127,13 +106,12 @@ body {
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-ui);
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font);
   font-size: var(--t-md);
-  line-height: 1.4;
+  line-height: 20px;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -153,12 +131,11 @@ button:disabled {
 }
 
 a {
-  color: inherit;
-  text-underline-offset: 2px;
+  color: var(--primary);
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -174,7 +151,6 @@ a {
   border: 0;
 }
 
-/* Label tone helpers: set --tone on an element, children use it */
 .tone-slate { --tone: var(--tone-slate); }
 .tone-red { --tone: var(--tone-red); }
 .tone-orange { --tone: var(--tone-orange); }
@@ -185,90 +161,121 @@ a {
 .tone-violet { --tone: var(--tone-violet); }
 .tone-pink { --tone: var(--tone-pink); }
 
-/* Buttons */
+/* A small label-color dot. */
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+/* Buttons: filled, tonal, outlined, text. All pill-shaped, 40px tall. */
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 40px;
-  padding: 0 16px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
-  background: var(--sheet-raised);
-  color: var(--ink);
+  padding: 0 24px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--primary);
   font-size: var(--t-md);
-  font-weight: 560;
-  letter-spacing: -0.005em;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
   white-space: nowrap;
-  transition:
-    background var(--dur) var(--ease),
-    border-color var(--dur) var(--ease),
-    transform 120ms var(--ease);
-}
-
-.btn:hover:not(:disabled) {
-  border-color: var(--ink-3);
-}
-
-.btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.38;
 }
 
-.btn-primary {
-  background: var(--action);
-  border-color: var(--action);
-  color: var(--on-action);
+.btn-filled {
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: var(--action-hover);
-  border-color: var(--action-hover);
+.btn-filled:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 92%, var(--on-primary));
 }
 
-.btn-quiet {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ink-2);
+.btn-tonal {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
 }
 
-.btn-quiet:hover:not(:disabled) {
-  background: var(--sunk);
-  border-color: transparent;
-  color: var(--ink);
+.btn-tonal:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-container) 92%, var(--on-primary-container));
 }
 
-.btn-danger {
-  color: var(--danger);
+.btn-outlined {
+  box-shadow: inset 0 0 0 1px var(--outline);
+}
+
+.btn-text {
+  padding: 0 12px;
+}
+
+.btn-outlined:hover:not(:disabled),
+.btn-text:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
-  border-radius: var(--r-md);
+  border-radius: 50%;
   background: transparent;
-  color: var(--ink-2);
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  color: var(--on-surface-variant);
+  transition: background-color var(--dur) var(--ease);
 }
 
 .icon-btn:hover:not(:disabled) {
-  background: var(--sunk);
-  color: var(--ink);
+  background: var(--hover);
 }
 
-/* Serif figures: the ordinals that give Lineup its voice */
-.figure {
-  font-family: var(--font-figure);
-  font-variant-numeric: lining-nums tabular-nums;
-  font-feature-settings: 'lnum' 1, 'tnum' 1;
+.icon-btn:active:not(:disabled) {
+  background: var(--pressed);
+}
+
+/* Outlined text field and select. */
+.field {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--on-surface);
+  font-size: var(--t-md);
+}
+
+.field::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-color: transparent;
+}
+
+select.field {
+  padding-right: 8px;
+}
+
+.field:disabled {
+  opacity: 0.38;
 }
 
 @media (prefers-reduced-motion: reduce) {

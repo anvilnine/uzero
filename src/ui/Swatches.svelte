@@ -51,15 +51,16 @@
   .swatches {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 0;
+    margin: 0 -6px;
   }
   .swatches:focus {
     outline: none;
   }
   .sw {
     position: relative;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 0;
     border-radius: 50%;
@@ -67,22 +68,24 @@
     display: grid;
     place-items: center;
   }
+  .sw:hover {
+    background: var(--hover);
+  }
   .sw::before {
     content: '';
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: var(--tone);
-    transition: transform var(--dur) var(--ease);
-  }
-  .sw:hover::before {
-    transform: scale(1.1);
   }
   .sw[aria-checked='true']::after {
     content: '';
     position: absolute;
-    inset: 2px;
+    inset: 5px;
     border-radius: 50%;
-    box-shadow: 0 0 0 2px var(--tone);
+    box-shadow: 0 0 0 2px var(--on-surface);
+  }
+  .sw:focus-visible {
+    outline-offset: -2px;
   }
 </style>

@@ -21,6 +21,7 @@
     download: 'M10 3.5v9M6 9l4 4 4-4M4 16.5h12',
     upload: 'M10 13V4M6 7.5l4-4 4 4M4 16.5h12',
     tab: 'M3.5 6.5a2 2 0 0 1 2-2h3l1.5 2h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-9.5a2 2 0 0 1-2-2v-8z',
+    copy: 'M7.5 7.5h8v8.5a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V7.5zM12.5 7.5V4.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1V13a1 1 0 0 0 1 1h2',
     signout: 'M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M12 6.5L15.5 10 12 13.5M15.5 10H8',
   } as const;
   export type IconName = keyof typeof PATHS;

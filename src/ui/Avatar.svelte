@@ -7,7 +7,7 @@
     email,
     photo = '',
     tone,
-    size = 34,
+    size = 32,
     dim = false,
   }: {
     name: string;
@@ -31,7 +31,7 @@
   class:dim
   style:width="{size}px"
   style:height="{size}px"
-  style:font-size="{Math.round(size * 0.38)}px"
+  style:font-size="{Math.round(size * 0.44)}px"
 >
   {#if photo && !failed}
     <img
@@ -45,7 +45,7 @@
       onerror={() => (failed = true)}
     />
   {:else}
-    <span aria-hidden="true">{initials(name, email)}</span>
+    <span aria-hidden="true">{initials(name, email).slice(0, 1)}</span>
   {/if}
 </span>
 
@@ -57,19 +57,11 @@
     flex: none;
     border-radius: 50%;
     overflow: hidden;
-    background: color-mix(in oklab, var(--tone) 22%, var(--sheet-raised));
-    color: color-mix(in oklab, var(--tone) 70%, var(--ink));
-    font-weight: 650;
-    letter-spacing: 0.01em;
+    background: color-mix(in srgb, var(--tone) 18%, var(--surface));
+    color: color-mix(in srgb, var(--tone) 70%, var(--on-surface));
+    font-weight: 500;
+    line-height: 1;
     user-select: none;
-  }
-  .avatar::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 10%, transparent);
-    pointer-events: none;
   }
   img {
     width: 100%;
@@ -79,6 +71,6 @@
   }
   .dim {
     filter: grayscale(1);
-    opacity: 0.7;
+    opacity: 0.6;
   }
 </style>
