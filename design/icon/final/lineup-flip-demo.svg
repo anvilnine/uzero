@@ -77,6 +77,9 @@
       0%, 40% { opacity: .45; animation-timing-function: ease-out; }
       45%, 100% { opacity: 0; }
     }
+    /* The leather grain is sub-pixel below ~256 px and would alias into
+       speckle, so browsers drop it at small sizes. */
+    @media (max-width: 255px) { .tile-grain { display: none; } }
     @media (prefers-reduced-motion: reduce) {
       #flap-4 * { animation: none !important; }
     }
@@ -129,6 +132,17 @@
     <filter id="soft-8" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="8"/></filter>
     <filter id="soft-4" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>
     <filter id="soft-2" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>
+    <!-- leather pebble grain (tile only): bump-lit noise split into a light
+         and a dark layer around the flat-light level, low alpha -->
+    <filter id="leather" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".32" numOctaves="2" seed="11" result="noise"/>
+      <feDiffuseLighting in="noise" surfaceScale="1.2" diffuseConstant="1" lighting-color="#FFFFFF" result="lit">
+        <feDistantLight azimuth="270" elevation="58"/>
+      </feDiffuseLighting>
+      <feColorMatrix in="lit" type="matrix" values="0 0 0 0 1  0 0 0 0 .86  0 0 0 0 .72  1.6 0 0 0 -1.36" result="hi"/>
+      <feColorMatrix in="lit" type="matrix" values="0 0 0 0 .36  0 0 0 0 .1  0 0 0 0 0  -1.6 0 0 0 1.36" result="lo"/>
+      <feMerge><feMergeNode in="lo"/><feMergeNode in="hi"/></feMerge>
+    </filter>
     <!-- enamel body: soft vignette, darker toward the lower edges (no noise) -->
     <radialGradient id="tile-body" cx="512" cy="380" r="720" gradientUnits="userSpaceOnUse">
       <stop offset=".55" stop-color="#7A2400" stop-opacity="0"/>
@@ -191,6 +205,7 @@
     <use href="#tile-shape" fill="url(#tile-fill)"/>
     <g clip-path="url(#clip-tile)">
       <use href="#tile-shape" fill="url(#tile-body)"/>
+      <rect class="tile-grain" width="1024" height="1024" filter="url(#leather)" opacity="0.6"/>
       <use href="#tile-shape" fill="url(#tile-sheen)"/>
       <!-- soft pillowed inner edge -->
       <use href="#tile-shape" fill="none" stroke="url(#tile-rim)" stroke-width="44" filter="url(#soft-12)"/>
