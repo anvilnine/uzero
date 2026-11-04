@@ -1,8 +1,15 @@
 {
   "name": "lineup",
-  "description": "Put your Google accounts in your order.",
+  "description": "Choose your default Google account and the order of your signed-in Google accounts.",
   "private": true,
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "homepage": "https://github.com/anvilnine/lineup",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anvilnine/lineup.git"
+  },
+  "bugs": "https://github.com/anvilnine/lineup/issues",
   "type": "module",
   "scripts": {
     "dev": "wxt",
