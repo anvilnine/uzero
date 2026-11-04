@@ -8,31 +8,18 @@ import type { Account, AppState, Prefs, Request, ServiceInfo, WizardState } from
 
 type Listener = (s: AppState) => void;
 
-function portrait(bg1: string, bg2: string, skin: string, hair: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="${bg1}"/><stop offset="1" stop-color="${bg2}"/></linearGradient></defs>` +
-    `<rect width="64" height="64" fill="url(#g)"/>` +
-    `<path d="M14 64c2-13 9-19 18-19s16 6 18 19z" fill="${hair}" opacity=".9"/>` +
-    `<circle cx="32" cy="29" r="12" fill="${skin}"/>` +
-    `<path d="M19 28c0-9 6-15 13-15s13 6 13 15c-3-5-8-7-13-7s-10 2-13 7z" fill="${hair}"/>` +
-    `</svg>`;
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
-}
-
 const ACCOUNTS: Account[] = [
   {
     email: 'ana.reyes@gmail.com',
     name: 'Ana Reyes',
-    photo: portrait('#c9d8f2', '#9fb6e6', '#e8b996', '#3b2a22'),
+    photo: '',
     index: 0,
     signedOut: false,
   },
   {
     email: 'ana@northwind.studio',
     name: 'Ana Reyes',
-    photo: portrait('#d7e8d4', '#a9cba3', '#e8b996', '#3b2a22'),
+    photo: '',
     index: 1,
     signedOut: false,
   },
@@ -206,7 +193,7 @@ function presetWizard(): WizardState | null {
   }
 }
 
-if (typeof location !== 'undefined' && location.pathname.includes('reorder')) {
+if (typeof location !== 'undefined' && (location.pathname.includes('reorder') || location.pathname.includes('sidepanel'))) {
   state.wizard = presetWizard() ?? wizardStart(PREFS.order.slice(0, 4));
 } else if (scenario === 'in-progress') {
   state.wizard = { ...wizardStart(PREFS.order.slice(0, 4)), phase: 'signing-in', current: 1, completed: [PREFS.order[0]!], tabId: 7 };

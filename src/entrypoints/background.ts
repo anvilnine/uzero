@@ -30,6 +30,7 @@ const ACCOUNTS_HOST = 'accounts.google.com';
 /** Pages the wizard's Google tab may show. Anywhere else, the user took the tab over. */
 const WIZARD_HOSTS: ReadonlySet<string> = new Set(ACCOUNT_HOSTS);
 const REORDER_PAGE = '/reorder.html' as PublicPath;
+const PANEL_PAGE = '/sidepanel.html' as PublicPath;
 // BROWSER (not FIREFOX): vitest defines env flags as strings, so "false" would be truthy there.
 const IS_FIREFOX = import.meta.env.BROWSER === 'firefox';
 
@@ -457,10 +458,12 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
 /**
  * Open the reorder page. While a reorder is in progress its state is kept (never reset mid-sign-in)
  * and its page is focused instead of opening a second one. `fromPage` is the reorder tab that asked.
+ * With `panel`, the steps live in the side panel, so no reorder tab is opened.
  */
-async function wizardOpen(queue: string[], fromPage: number | undefined): Promise<WizardState> {
+async function wizardOpen(queue: string[], fromPage: number | undefined, panel = false): Promise<WizardState> {
   let state = (await wizardStep({ type: 'open', queue, now: Date.now() }))!;
   if (isActive(state)) state = (await wizardStep({ type: 'touch', now: Date.now() }))!;
+  if (panel) return state;
   const pageTabId = fromPage ?? (await showReorderPage(state.pageTabId));
   if (pageTabId !== undefined && pageTabId !== state.pageTabId) {
     state = (await wizardStep({ type: 'pageOpened', tabId: pageTabId }))!;
@@ -524,7 +527,8 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       return activeTabService();
     case 'wizardOpen': {
       const fromPage = sender.url?.startsWith(browser.runtime.getURL(REORDER_PAGE)) ? sender.tab?.id : undefined;
-      return wizardOpen(req.queue, fromPage);
+      const fromPanel = !!sender.url?.startsWith(browser.runtime.getURL(PANEL_PAGE));
+      return wizardOpen(req.queue, fromPage, req.panel === true || fromPanel);
     }
     case 'wizardBegin':
       return wizardAction('begin');

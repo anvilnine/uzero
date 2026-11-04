@@ -3,10 +3,12 @@
   import { getApi, type Api } from '../../lib/api';
   import type { AppState, Request, WizardState } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
-  import Icon, { type IconName } from '../../ui/Icon.svelte';
-  import Mark from '../../ui/Mark.svelte';
+  import Icon from '../../ui/Icon.svelte';
   import { lineup, toneOf, type Row } from '../../ui/model';
   import { closeView, errorText } from '../../ui/nav';
+
+  /** Narrow layout for the browser's side panel, next to Google's sign-in page. */
+  let { panel = false }: { panel?: boolean } = $props();
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
@@ -15,6 +17,8 @@
   let pending = $state<Request['type'] | null>(null);
   let cancelled = $state(false);
   let heading = $state<HTMLElement | null>(null);
+  let copied = $state<string | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const w = $derived(app?.wizard ?? null);
   const rowsByEmail = $derived(new Map((app ? lineup(app) : []).map((r) => [r.email, r])));
@@ -43,6 +47,7 @@
   );
 
   onMount(() => {
+    if (panel) document.body.classList.add('panel');
     let unsub = () => {};
     (async () => {
       try {
@@ -114,8 +119,8 @@
       case 'tab-closed':
         return {
           heading: 'The Google tab was closed',
-          detail: `Number ${n} still needs to sign in as ${email}.`,
-          lede: `Reopen it to sign in as ${email}, or skip it for now.`,
+          detail: `Account ${n} still needs to sign in.`,
+          lede: 'Reopen the sign-in page, or skip this account for now.',
           retry: 'Reopen sign-in',
           tone: 'info',
         };
@@ -123,23 +128,23 @@
         return {
           heading: 'Reorder paused',
           detail: 'Nothing happened for 30 minutes, so Pin is back on.',
-          lede: `Pick up where you left off with ${email}, or skip it for now.`,
-          retry: 'Keep going',
+          lede: 'Continue with this account, or skip it for now.',
+          retry: 'Continue',
           tone: 'info',
         };
       case 'out-of-order':
         return {
           heading: 'That account is out of order',
-          detail: `${w?.error ?? ''} Number ${n} should be ${email}.`,
-          lede: 'Try again to sign out and start over, or skip it for now.',
+          detail: `${w?.error ?? ''} Account ${n} should be ${email}.`,
+          lede: 'Try again to sign out and start over, or skip this account.',
           retry: 'Try again',
           tone: 'warn',
         };
       default:
         return {
           heading: 'That’s a different account',
-          detail: `${w?.error ?? 'Google shows a different account than expected.'} Number ${n} should be ${email}.`,
-          lede: `Try again to sign in as ${email}, or skip it for now.`,
+          detail: `${w?.error ?? 'Google shows a different account.'} Account ${n} should be ${email}.`,
+          lede: 'A password manager can fill in a different email. Try again signs out and starts over, so check the email on Google’s page before you type a password.',
           retry: 'Try again',
           tone: 'warn',
         };
@@ -153,7 +158,7 @@
       .map((r) => r.email);
     pending = 'wizardOpen';
     try {
-      const next = await api.send({ type: 'wizardOpen', queue });
+      const next = await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
       app = { ...app, wizard: next };
       cancelled = false;
     } catch (e) {
@@ -163,630 +168,660 @@
     }
   }
 
+  // Password managers often fill a different email on Google's page; pasting the right one is quickest.
+  async function copyEmail(email: string) {
+    try {
+      await navigator.clipboard.writeText(email);
+      copied = email;
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => (copied = null), 2000);
+    } catch {
+      actionError = 'Couldn’t copy. Select the email and copy it by hand.';
+    }
+  }
+
+  /** One row per step, for the step list: sign out, then each account. */
+  const steps = $derived.by(() => {
+    if (!w || w.phase === 'confirm' || w.phase === 'done') return [];
+    const out: { key: string; label: string; state: 'done' | 'now' | 'todo' | 'skipped' }[] = [
+      { key: 'out', label: 'Sign out of all accounts', state: w.phase === 'signing-out' ? 'now' : 'done' },
+    ];
+    queueRows.forEach((r, i) => {
+      let state: 'done' | 'now' | 'todo' | 'skipped' = 'todo';
+      if (w.phase !== 'signing-out') {
+        if (i === w.current) state = 'now';
+        else if (i < w.current) state = w.completed.includes(r.email) ? 'done' : 'skipped';
+      }
+      out.push({ key: r.email, label: r.email, state });
+    });
+    return out;
+  });
+
   async function turnOnPin() {
     if (!api || !app) return;
     app = { ...app, prefs: { ...app.prefs, pinEnabled: true } };
     await api.send({ type: 'savePrefs', patch: { pinEnabled: true } }).catch(() => {});
   }
 
-  type StepState = 'done' | 'current' | 'next' | 'skipped' | 'problem';
+  // One step to sign out, one per account, then done.
+  const progress = $derived.by(() => {
+    if (!w) return 0;
+    const total = w.queue.length + 1;
+    if (w.phase === 'confirm') return 0;
+    if (w.phase === 'signing-out') return 0.5 / total;
+    if (w.phase === 'done') return 1;
+    return (1 + w.current) / total;
+  });
 
-  function stepOf(i: number, wz: WizardState): StepState {
-    const email = wz.queue[i]!;
-    if (wz.phase === 'done' || i < wz.current) return wz.completed.includes(email) ? 'done' : 'skipped';
-    if (i === wz.current && wz.phase === 'signing-in') return 'current';
-    if (i === wz.current && wz.phase === 'error') return 'problem';
-    return 'next';
-  }
-
-  const signOutStep = $derived<StepState>(
-    !w || w.phase === 'confirm' ? 'next' : w.phase === 'signing-out' ? 'current' : 'done',
-  );
-
-
-  const prep: { icon: IconName; text: string }[] = [
-    { icon: 'signout', text: 'Every Google account signs out, in every tab. Save any work open in Google first.' },
-    { icon: 'key', text: 'Have each password and 2-Step Verification code ready.' },
-    {
-      icon: 'sync',
-      text: 'If Chrome itself is signed in with sync, Chrome may put that account back at #1. Pin still covers it.',
-    },
+  const prep = [
+    'Every Google account signs out, in every tab. Save any open work in Google first.',
+    'Have each password and 2-Step Verification code ready.',
+    'Password managers (like LastPass) can fill in a different email. Check the email on Google’s page before you type a password.',
+    'If Chrome itself is signed in with sync, Chrome may put that account back first. Pin still works.',
   ];
 </script>
 
-<div class="page">
-  <header class="masthead">
-    <div class="brand">
-      <Mark size={26} />
-      <span>Lineup</span>
-    </div>
-    {#if w && w.phase !== 'done' && w.phase !== 'confirm'}
-      <button type="button" class="btn btn-quiet" onclick={() => act('wizardCancel')} disabled={!!pending}>
-        Cancel
-      </button>
-    {/if}
-  </header>
+{#snippet chip(r: Row)}
+  <div class="chip">
+    <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={20} />
+    <span>{r.email}</span>
+  </div>
+{/snippet}
 
-  {#if loadError}
-    <main class="solo">
+<div class="page" class:panel>
+  <main class="card" aria-live="polite">
+    {#if w && w.phase !== 'confirm'}
+      <div
+        class="progress"
+        role="progressbar"
+        aria-label="Reorder progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress * 100)}
+      >
+        <span style:width="{progress * 100}%"></span>
+      </div>
+    {/if}
+
+    <img class="logo" src="/icon/32.png" alt="" width="32" height="32" />
+
+    {#if loadError}
       <h1>Couldn’t load the reorder</h1>
       <p class="lede">{loadError}</p>
-      <button type="button" class="btn btn-primary" onclick={() => location.reload()}>Try again</button>
-    </main>
-  {:else if !app}
-    <main class="solo" aria-busy="true"><p class="lede">Loading…</p></main>
-  {:else if !w}
-    <main class="solo">
+      <div class="actions">
+        <span></span>
+        <button type="button" class="btn btn-filled" onclick={() => location.reload()}>Try again</button>
+      </div>
+    {:else if !app}
+      <p class="lede" aria-busy="true">Loading…</p>
+    {:else if !w}
       <h1 tabindex="-1" bind:this={heading}>
         {cancelled ? 'Reorder cancelled' : 'No reorder running'}
       </h1>
       <p class="lede">
         {cancelled
-          ? 'Any account you signed back in to stays signed in. Sign in to the rest at accounts.google.com.'
+          ? 'Accounts you already signed back in to stay signed in. Sign in to the rest at accounts.google.com.'
           : 'Put Google’s account order in your order by signing out and back in.'}
       </p>
       <div class="actions">
-        <button type="button" class="btn btn-primary" onclick={startFresh} disabled={!!pending}>
+        <button type="button" class="btn btn-text" onclick={closeView}>Close</button>
+        <button type="button" class="btn btn-filled" onclick={startFresh} disabled={!!pending}>
           Start with my order
         </button>
-        <button type="button" class="btn btn-quiet" onclick={closeView}>Close</button>
       </div>
-    </main>
-  {:else}
-    <div class="layout">
-      <nav class="rail" aria-label="Steps">
-        <ol>
-          <li class="step {w.phase === 'confirm' ? 'current' : 'done'}" aria-current={w.phase === 'confirm' ? 'step' : undefined}>
-            <span class="marker">{#if w.phase !== 'confirm'}<Icon name="check" size={14} />{/if}</span>
-            <span class="step-text">Before you start</span>
+    {:else if w.phase === 'confirm'}
+      <h1 tabindex="-1" bind:this={heading}>Reorder your Google accounts</h1>
+      <p class="lede">
+        Google numbers accounts in the order you sign in. You’ll sign out of all {w.queue.length}, then
+        sign back in one at a time, in this order.
+      </p>
+      <ol class="order">
+        {#each queueRows as r, i (r.email)}
+          <li>
+            <span class="n">{i + 1}</span>
+            <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
+            <span class="who">
+              <span class="who-name">{r.meta.label ?? r.name}</span>
+              <span class="who-email">{r.email}</span>
+            </span>
           </li>
-          <li class="step {signOutStep}" aria-current={signOutStep === 'current' ? 'step' : undefined}>
-            <span class="marker">{#if signOutStep === 'done'}<Icon name="check" size={14} />{/if}</span>
-            <span class="step-text">Sign out of everything</span>
-          </li>
-          {#each queueRows as r, i (r.email)}
-            {@const s = stepOf(i, w)}
-            <li class="step acct {s}" aria-current={s === 'current' || s === 'problem' ? 'step' : undefined}>
-              <span class="marker figure">
-                {#if s === 'done'}<Icon name="check" size={14} />{:else}{i + 1}{/if}
-              </span>
-              <span class="step-text">
-                <span class="step-name">{r.meta.label ?? r.name}</span>
-                <span class="step-sub">{r.email}</span>
-              </span>
-              {#if s === 'skipped'}<span class="step-flag">Skipped</span>{/if}
-              <span class="sr-only">
-                {s === 'done' ? 'Signed in' : s === 'skipped' ? 'Skipped' : s === 'current' ? 'Now' : ''}
-              </span>
-            </li>
-          {/each}
-          <li class="step {w.phase === 'done' ? 'current' : 'next'}" aria-current={w.phase === 'done' ? 'step' : undefined}>
-            <span class="marker"></span>
-            <span class="step-text">Done</span>
-          </li>
+        {/each}
+      </ol>
+      <h2>Before you start</h2>
+      <ul class="prep">
+        {#each prep as p (p)}
+          <li>{p}</li>
+        {/each}
+      </ul>
+      <div class="actions">
+        <button type="button" class="btn btn-text" onclick={() => act('wizardCancel')} disabled={!!pending}>
+          Not now
+        </button>
+        <button type="button" class="btn btn-filled" onclick={() => act('wizardBegin')} disabled={!!pending}>
+          Sign out and start
+        </button>
+      </div>
+    {:else if w.phase === 'signing-out'}
+      <h1 tabindex="-1" bind:this={heading}>Signing out</h1>
+      <p class="lede">
+        A Google tab is signing you out of every account. This page continues when Google is done.
+      </p>
+      <div class="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Waiting for Google</span>
+      </div>
+      <div class="actions">
+        <span></span>
+        <button type="button" class="btn btn-filled" onclick={goToGoogleTab} disabled={!!pending}>
+          Go to the Google tab
+        </button>
+      </div>
+    {:else if (w.phase === 'signing-in' || w.phase === 'error') && currentRow}
+      <p class="step">Account {w.current + 1} of {w.queue.length}</p>
+      {#if w.phase === 'error'}
+        <h1 tabindex="-1" bind:this={heading}>{errorCopy.heading}</h1>
+        {@render chip(currentRow)}
+        <p class="detail" role="alert">{errorCopy.detail}</p>
+        <p class="lede left">{errorCopy.lede}</p>
+        <div class="actions">
+          <button type="button" class="btn btn-text" onclick={() => act('wizardSkip')} disabled={!!pending}>
+            Skip this account
+          </button>
+          <button type="button" class="btn btn-filled" onclick={() => act('wizardRetry')} disabled={!!pending}>
+            {errorCopy.retry}
+          </button>
+        </div>
+      {:else}
+        <h1 tabindex="-1" bind:this={heading}>Sign in as</h1>
+        <div class="target">
+          <Avatar
+            name={currentRow.name}
+            email={currentRow.email}
+            photo={currentRow.account?.photo}
+            tone={toneOf(currentRow)}
+            size={32}
+          />
+          <span class="who">
+            <span class="target-email">{currentRow.email}</span>
+            {#if currentRow.meta.label}
+              <span class="who-email">{currentRow.meta.label}</span>
+            {/if}
+          </span>
+          <button
+            type="button"
+            class="btn btn-text copy"
+            onclick={() => copyEmail(currentRow.email)}
+            aria-label="Copy {currentRow.email}"
+          >
+            <Icon name={copied === currentRow.email ? 'check' : 'copy'} size={18} />
+            {copied === currentRow.email ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+        <ol class="howto">
+          <li>In the Google tab, check that the email is <strong>{currentRow.email}</strong>.</li>
+          <li>Type its password. Do 2-Step Verification if Google asks.</li>
+          <li>Lineup goes to the next account by itself.</li>
         </ol>
-      </nav>
-
-      <main class="panel" aria-live="polite">
-        {#if w.phase === 'confirm'}
-          <h1 tabindex="-1" bind:this={heading}>Put Google in your order</h1>
-          <p class="lede">
-            Google numbers your accounts in the order you sign in. To change that, you’ll sign out of
-            all {w.queue.length} and sign back in, one at a time, in this order.
-          </p>
-          <ul class="prep">
-            {#each prep as p (p.icon)}
-              <li><span class="prep-icon"><Icon name={p.icon} /></span><span>{p.text}</span></li>
-            {/each}
-          </ul>
-          <div class="actions">
-            <button type="button" class="btn btn-primary big" onclick={() => act('wizardBegin')} disabled={!!pending}>
-              <Icon name="signout" size={18} /> Sign out and start
-            </button>
-            <button type="button" class="btn btn-quiet" onclick={() => act('wizardCancel')} disabled={!!pending}>
-              Not now
-            </button>
-          </div>
-        {:else if w.phase === 'signing-out'}
-          <h1 tabindex="-1" bind:this={heading}>Signing you out</h1>
-          <p class="lede">
-            A Google tab is signing out of every account. This page moves on as soon as Google
-            confirms.
-          </p>
-          <p class="wait"><span class="pulse"></span>Waiting for Google</p>
-          <div class="actions">
-            <button type="button" class="btn" onclick={goToGoogleTab} disabled={!!pending}>
-              <Icon name="tab" size={18} /> Go to the Google tab
-            </button>
-          </div>
-        {:else if (w.phase === 'signing-in' || w.phase === 'error') && currentRow}
-          <div class="who">
-            <div class="who-av">
-              <Avatar
-                name={currentRow.name}
-                email={currentRow.email}
-                photo={currentRow.account?.photo}
-                tone={toneOf(currentRow)}
-                size={72}
-              />
-              <span class="bib figure" class:lead={w.current === 0}>{w.current + 1}</span>
-            </div>
-            <span class="count">Account {w.current + 1} of {w.queue.length}</span>
-          </div>
-          {#if w.phase === 'error'}
-            <h1 tabindex="-1" bind:this={heading}>{errorCopy.heading}</h1>
-            <div class="callout {errorCopy.tone}" role="alert">
-              <Icon name={errorCopy.tone === 'warn' ? 'alert' : 'tab'} />
-              <p>{errorCopy.detail}</p>
-            </div>
-            <p class="lede">{errorCopy.lede}</p>
-            <div class="actions">
-              <button type="button" class="btn btn-primary big" onclick={() => act('wizardRetry')} disabled={!!pending}>
-                {errorCopy.retry}
-              </button>
-              <button type="button" class="btn big" onclick={() => act('wizardSkip')} disabled={!!pending}>
-                <Icon name="skip" size={18} /> Skip this account
-              </button>
-            </div>
-          {:else}
-            <h1 tabindex="-1" bind:this={heading} class="email-h">
-              Sign in as <span class="addr">{currentRow.email}</span>
-            </h1>
-            <p class="lede">
-              In the Google tab, choose this account or type its email, then its password.
-              {#if w.current > 0}It joins as number {w.current + 1}.{/if}
-            </p>
-            <p class="wait"><span class="pulse"></span>Waiting for you to sign in</p>
-            <div class="actions">
-              <button type="button" class="btn btn-primary" onclick={goToGoogleTab} disabled={!!pending}>
-                <Icon name="tab" size={18} /> Go to the Google tab
-              </button>
-              <button type="button" class="btn" onclick={() => act('wizardReopen')} disabled={!!pending}>
-                <Icon name="refresh" size={18} /> Reopen sign-in
-              </button>
-              <button type="button" class="btn btn-quiet" onclick={() => act('wizardSkip')} disabled={!!pending}>
-                <Icon name="skip" size={18} /> Skip this account
-              </button>
-            </div>
-          {/if}
-        {:else if w.phase === 'done'}
-          <h1 tabindex="-1" bind:this={heading}>
-            {matches ? 'Google now follows your order' : 'Almost in order'}
-          </h1>
-          <p class="lede">
-            {#if matches}
-              Your #1 is now Google’s default everywhere.
-            {:else}
-              Google put {googleNow[0]?.email ?? 'another account'} first. Chrome sync can do this.
-              {app.prefs.pinEnabled ? 'Pin is on, so links still open as your #1.' : 'Turn on Pin so links open as your #1 anyway.'}
-            {/if}
-          </p>
-
-          <table class="compare">
-            <caption class="sr-only">Your order compared with Google’s order now</caption>
-            <thead>
-              <tr>
-                <th scope="col"><span class="sr-only">Number</span></th>
-                <th scope="col">Your order</th>
-                <th scope="col">Google now</th>
-                <th scope="col"><span class="sr-only">Match</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each w.queue as email, i (email)}
-                {@const g = googleNow[i]}
-                {@const ok = g?.email === email}
-                <tr class:mismatch={!ok}>
-                  <td class="figure n" class:lead={i === 0}><span>{i + 1}</span></td>
-                  <td>{email}</td>
-                  <td class:muted={!g}>{g ? g.email : 'Not signed in'}</td>
-                  <td class="mark">
-                    {#if ok}<span class="ok"><Icon name="check" size={16} /><span class="sr-only">Matches</span></span>
-                    {:else}<span class="no"><Icon name="alert" size={16} /><span class="sr-only">Different</span></span>{/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-
-          <div class="actions">
-            {#if !matches && !app.prefs.pinEnabled}
-              <button type="button" class="btn btn-primary big" onclick={turnOnPin}>Turn on Pin</button>
-              <button type="button" class="btn btn-quiet" onclick={closeView}>Close</button>
-            {:else}
-              <button type="button" class="btn btn-primary big" onclick={closeView}>
-                <Icon name="check" size={18} /> Close
-              </button>
-            {/if}
-          </div>
+        <p class="tip">
+          <Icon name="key" size={18} />
+          <span>Did a password manager fill in a different email? Clear the email field, then paste this one.</span>
+        </p>
+        <div class="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="status-text">Waiting for you to sign in</span>
+          <button type="button" class="btn btn-text" onclick={() => act('wizardReopen')} disabled={!!pending}>
+            Reopen sign-in
+          </button>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-text" onclick={() => act('wizardSkip')} disabled={!!pending}>
+            Skip this account
+          </button>
+          <button type="button" class="btn btn-filled" onclick={goToGoogleTab} disabled={!!pending}>
+            Go to the Google tab
+          </button>
+        </div>
+      {/if}
+    {:else if w.phase === 'done'}
+      <h1 tabindex="-1" bind:this={heading}>
+        {matches ? 'Google now uses your order' : 'Almost in order'}
+      </h1>
+      <p class="lede">
+        {#if matches}
+          Your first account is now Google’s default.
+        {:else}
+          Google put {googleNow[0]?.email ?? 'another account'} first. Chrome sync can do this.
+          {app.prefs.pinEnabled
+            ? 'Pin is on, so links still open as your default.'
+            : 'Turn on Pin so links open as your default anyway.'}
         {/if}
+      </p>
 
-        {#if actionError}
-          <p class="action-error" role="alert"><Icon name="alert" size={18} /> {actionError}</p>
+      <ol class="order" aria-label="Your order compared with Google’s order now">
+        {#each w.queue as email, i (email)}
+          {@const g = googleNow[i]}
+          {@const ok = g?.email === email}
+          <li>
+            <span class="n">{i + 1}</span>
+            <span class="who">
+              <span class="who-name">{email}</span>
+              {#if !ok}
+                <span class="who-email">Google now: {g ? g.email : 'not signed in'}</span>
+              {/if}
+            </span>
+            {#if ok}
+              <span class="mark ok"><Icon name="check" size={18} /><span class="sr-only">Matches</span></span>
+            {:else}
+              <span class="mark no"><Icon name="alert" size={18} /><span class="sr-only">Different</span></span>
+            {/if}
+          </li>
+        {/each}
+      </ol>
+
+      <div class="actions">
+        {#if !matches && !app.prefs.pinEnabled}
+          <button type="button" class="btn btn-text" onclick={closeView}>Close</button>
+          <button type="button" class="btn btn-filled" onclick={turnOnPin}>Turn on Pin</button>
+        {:else}
+          <span></span>
+          <button type="button" class="btn btn-filled" onclick={closeView}>Close</button>
         {/if}
-      </main>
+      </div>
+    {/if}
+
+    {#if steps.length > 0}
+      <ol class="steps" aria-label="Steps">
+        {#each steps as st (st.key)}
+          <li class={st.state} aria-current={st.state === 'now' ? 'step' : undefined}>
+            <span class="dot" aria-hidden="true">
+              {#if st.state === 'done'}<Icon name="check" size={14} />{/if}
+            </span>
+            <span class="step-label">{st.label}</span>
+            {#if st.state === 'skipped'}<span class="who-email">Skipped</span>{/if}
+          </li>
+        {/each}
+      </ol>
+    {/if}
+
+    {#if actionError}
+      <p class="action-error" role="alert">{actionError}</p>
+    {/if}
+  </main>
+
+  {#if w && w.phase !== 'done' && w.phase !== 'confirm'}
+    <div class="below">
+      <button type="button" class="btn btn-text" onclick={() => act('wizardCancel')} disabled={!!pending}>
+        Cancel reorder
+      </button>
     </div>
   {/if}
 </div>
 
 <style>
+  :global(body) {
+    background: var(--surface-container);
+  }
   .page {
     min-height: 100vh;
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 24px 32px 80px;
+    padding: 64px 16px;
   }
-  .masthead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 44px;
-    margin-bottom: 40px;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--font-figure);
-    font-size: 19px;
-    font-weight: 600;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
-    gap: 56px;
-    align-items: start;
-  }
-
-  /* Rail: the lineup filling in ------------------------------------------- */
-  .rail ol {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  .card {
     position: relative;
+    max-width: 450px;
+    margin: 0 auto;
+    padding: 40px 40px 32px;
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .progress {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: var(--surface-container-highest);
+  }
+  .progress span {
+    display: block;
+    height: 100%;
+    background: var(--primary);
+    transition: width 200ms var(--ease);
+  }
+
+  .logo {
+    display: block;
+    margin: 0 auto 16px;
+    border-radius: 6px;
   }
   .step {
-    position: relative;
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 6px 0;
-  }
-  /* connecting thread */
-  .step:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: 13.5px;
-    top: 38px;
-    bottom: -10px;
-    width: 1px;
-    background: var(--line-strong);
-  }
-  .step.done:not(:last-child)::after {
-    background: var(--ink-3);
-  }
-  .marker {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--paper);
-    box-shadow: inset 0 0 0 1.5px var(--line-strong);
-    color: var(--ink-3);
-    font-size: 15px;
-  }
-  .step.done .marker {
-    background: var(--ink);
-    box-shadow: none;
-    color: var(--paper);
-  }
-  .step.current .marker {
-    background: var(--jersey);
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--jersey) 30%, transparent);
-    color: var(--jersey-ink);
-    font-weight: 600;
-  }
-  .step.problem .marker {
-    background: var(--danger-soft);
-    box-shadow: inset 0 0 0 1.5px var(--danger);
-    color: var(--danger);
-  }
-  .step.skipped .marker {
-    border: 1.5px dashed var(--line-strong);
-    box-shadow: none;
-  }
-  .step-text {
-    display: grid;
-    min-width: 0;
-    color: var(--ink-2);
-  }
-  .step.current .step-text,
-  .step.problem .step-text {
-    color: var(--ink);
-    font-weight: 620;
-  }
-  .step.done .step-text {
-    color: var(--ink);
-  }
-  .step-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .step-sub {
+    margin: 0 0 8px;
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
-    font-weight: 400;
-    color: var(--ink-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .step-flag {
-    font-size: var(--t-xs);
-    font-weight: 600;
-    color: var(--ink-3);
-  }
-  .step-flag.warn {
-    color: var(--danger);
-  }
-
-  /* Panel -------------------------------------------------------------------- */
-  .panel,
-  .solo {
-    max-width: 560px;
-  }
-  .solo {
-    margin: 10vh auto 0;
-    text-align: left;
+    line-height: 16px;
   }
   h1 {
-    margin: 0 0 12px;
-    font-family: var(--font-figure);
-    font-size: 38px;
-    font-weight: 600;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+    font-size: var(--t-xl);
+    font-weight: 400;
+    line-height: 32px;
     text-wrap: balance;
   }
   h1:focus {
     outline: none;
   }
-  .email-h .addr {
-    display: block;
-    font-size: 0.72em;
-    letter-spacing: -0.01em;
-    overflow-wrap: anywhere;
-    margin-top: 4px;
-  }
   .lede {
     margin: 0 0 24px;
     font-size: var(--t-lg);
-    line-height: 1.55;
-    color: var(--ink-2);
-    max-width: 52ch;
+    line-height: 24px;
+    text-wrap: pretty;
+  }
+  .lede.left,
+  .detail,
+  .order,
+  .prep,
+  h2,
+  .status,
+  .action-error {
+    text-align: left;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    margin: 0 0 24px;
+    padding: 4px 12px 4px 4px;
+    border: 1px solid var(--outline-variant);
+    border-radius: 16px;
+    font-weight: 500;
+  }
+  .chip span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  h1 + .chip {
+    margin-top: 8px;
+  }
+  .detail {
+    margin: 0 0 8px;
+    font-size: var(--t-lg);
+    line-height: 24px;
+  }
+
+  .order {
+    list-style: none;
+    margin: 0 0 24px;
+    padding: 0;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--r-md);
+  }
+  .order li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 16px;
+  }
+  .order li + li {
+    border-top: 1px solid var(--outline-variant);
+  }
+  .n {
+    flex: none;
+    width: 12px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .who {
+    flex: 1;
+    display: grid;
+    min-width: 0;
+  }
+  .who-name,
+  .who-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .who-email {
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 16px;
+  }
+  .mark {
+    flex: none;
+    display: inline-flex;
+  }
+  .mark.ok {
+    color: var(--primary);
+  }
+  .mark.no {
+    color: var(--on-surface-variant);
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: var(--t-md);
+    font-weight: 500;
   }
   .prep {
-    list-style: none;
-    margin: 0 0 32px;
-    padding: 0;
-    background: var(--sheet);
-    border-radius: var(--r-lg);
-    box-shadow: inset 0 0 0 1px var(--line);
-  }
-  .prep li {
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-    padding: 14px 18px;
+    margin: 0 0 24px;
+    padding-left: 20px;
+    color: var(--on-surface-variant);
   }
   .prep li + li {
-    border-top: 1px solid var(--line);
+    margin-top: 8px;
   }
-  .prep-icon {
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    margin: 0 0 24px;
+    color: var(--on-surface-variant);
+  }
+  .status-text {
+    flex: 1;
+  }
+  .status .btn {
+    margin-right: -12px;
+  }
+  .spinner {
     flex: none;
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--r-md);
-    background: var(--sunk);
-    color: var(--ink-2);
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--surface-container-highest);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
-  .prep li > span:last-child {
-    padding-top: 5px;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
   }
-  .big {
-    min-height: 46px;
-    padding: 0 22px;
-    font-size: 15px;
-  }
-
-  .who {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 22px;
-  }
-  .who-av {
-    position: relative;
-  }
-  .bib {
-    position: absolute;
-    right: -6px;
-    bottom: -4px;
-    display: grid;
-    place-items: center;
-    min-width: 30px;
-    height: 30px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--ink);
-    color: var(--paper);
-    font-size: 16px;
-    font-weight: 600;
-    box-shadow: 0 0 0 3px var(--paper);
-  }
-  .bib.lead {
-    background: var(--jersey);
-    color: var(--jersey-ink);
-  }
-  .count {
-    color: var(--ink-2);
-    font-size: var(--t-sm);
-    font-weight: 600;
-  }
-
-  .wait {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 28px;
-    padding: 8px 14px 8px 12px;
-    border-radius: 999px;
-    background: var(--sheet);
-    box-shadow: inset 0 0 0 1px var(--line);
-    font-size: var(--t-sm);
-    font-weight: 600;
-    color: var(--ink-2);
-  }
-  .pulse {
-    position: relative;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--jersey);
-  }
-  .pulse::after {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border-radius: 50%;
-    border: 2px solid var(--jersey);
-    animation: ping 1.6s var(--ease) infinite;
-  }
-  @keyframes ping {
-    from {
-      transform: scale(0.6);
-      opacity: 1;
-    }
-    to {
-      transform: scale(1.6);
-      opacity: 0;
-    }
-  }
-
-  .callout {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    padding: 12px 14px;
-    margin: 0 0 16px;
-    border-radius: var(--r-md);
-  }
-  .callout p {
-    margin: 0;
-  }
-  .callout.warn {
-    background: var(--danger-soft);
-    color: var(--danger);
-  }
-  .callout.info {
-    background: var(--sheet);
-    box-shadow: inset 0 0 0 1px var(--line);
-    color: var(--ink-2);
-  }
-
-  .compare {
-    width: 100%;
-    margin: 0 0 28px;
-    border-collapse: collapse;
-    background: var(--sheet);
-    border-radius: var(--r-lg);
-    box-shadow: inset 0 0 0 1px var(--line);
-    font-size: var(--t-sm);
-  }
-  .compare th {
-    text-align: left;
-    padding: 12px 12px 6px;
-    font-weight: 600;
-    color: var(--ink-3);
-  }
-  .compare td {
-    padding: 10px 12px;
-    border-top: 1px solid var(--line);
-    overflow-wrap: anywhere;
-  }
-  .compare .n {
-    width: 44px;
-    padding-left: 14px;
-  }
-  .compare .n span {
-    display: inline-grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 15px;
-    color: var(--ink-3);
-  }
-  .compare .n.lead span {
-    background: var(--jersey);
-    color: var(--jersey-ink);
-    font-weight: 600;
-  }
-  .compare .mark {
-    width: 40px;
-    text-align: center;
-  }
-  .compare .ok {
-    color: var(--ok);
-  }
-  .compare .no {
-    color: var(--danger);
-  }
-  .compare tr.mismatch td:nth-child(3) {
-    color: var(--danger);
-  }
-  .muted {
-    color: var(--ink-3);
+  .actions .btn-text {
+    margin-left: -12px;
   }
   .action-error {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 16px;
-    color: var(--danger);
+    margin: 16px 0 0;
+    color: var(--error);
     font-size: var(--t-sm);
   }
 
-  @media (max-width: 820px) {
+  .below {
+    max-width: 450px;
+    margin: 8px auto 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 16px;
+  }
+
+  /* Sign-in target: the one email that matters right now. */
+  .target {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0 16px;
+    padding: 12px 8px 12px 12px;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--r-md);
+    text-align: left;
+  }
+  .target-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--t-lg);
+    font-weight: 500;
+    line-height: 24px;
+  }
+  .copy {
+    flex: none;
+    gap: 6px;
+  }
+  .howto {
+    margin: 0 0 16px;
+    padding-left: 20px;
+    text-align: left;
+  }
+  .howto li + li {
+    margin-top: 6px;
+  }
+  .howto strong {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .tip {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 12px;
+    border-radius: var(--r-md);
+    background: var(--surface-container);
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 20px;
+    text-align: left;
+  }
+  .tip :global(svg) {
+    flex: none;
+    margin-top: 1px;
+  }
+
+  /* Step list: where you are in the whole reorder. */
+  .steps {
+    list-style: none;
+    margin: 24px 0 0;
+    padding: 16px 0 0;
+    border-top: 1px solid var(--outline-variant);
+    text-align: left;
+  }
+  .steps li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 32px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+  }
+  .steps li.now {
+    color: var(--on-surface);
+    font-weight: 500;
+  }
+  .step-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dot {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--outline-variant);
+    border-radius: 50%;
+  }
+  .done .dot {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  .now .dot {
+    border-color: var(--primary);
+    box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 10px var(--primary);
+  }
+
+  @media (max-width: 520px) {
+    :global(body) {
+      background: var(--surface);
+    }
     .page {
-      padding: 16px 16px 60px;
+      padding: 0;
     }
-    .masthead {
-      margin-bottom: 24px;
+    .card {
+      max-width: none;
+      border-radius: 0;
+      padding: 32px 24px;
     }
-    .layout {
-      grid-template-columns: 1fr;
-      gap: 32px;
-    }
-    .rail {
-      order: 2;
-    }
-    h1 {
-      font-size: 30px;
-    }
+  }
+
+  /* Side panel: narrow column next to Google's page. Left-aligned, no outer card. */
+  :global(body.panel) {
+    background: var(--surface);
+  }
+  .page.panel {
+    min-height: 0;
+    padding: 0;
+  }
+  .panel .card {
+    max-width: none;
+    padding: 24px 16px 16px;
+    border-radius: 0;
+    text-align: left;
+  }
+  .panel .logo {
+    margin: 0 0 12px;
+  }
+  .panel h1 {
+    font-size: var(--t-lg);
+    line-height: 28px;
+  }
+  .panel .lede {
+    margin-bottom: 16px;
+    font-size: var(--t-md);
+    line-height: 20px;
+  }
+  .panel .actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .panel .actions > span:empty {
+    display: none;
+  }
+  .panel .actions .btn-text {
+    margin-left: 0;
+  }
+  .panel .below {
+    max-width: none;
+    justify-content: flex-start;
+    padding: 0 4px 16px;
   }
 </style>

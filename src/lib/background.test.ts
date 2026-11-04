@@ -184,6 +184,21 @@ describe('background router', () => {
     expect((await fakeBrowser.tabs.query({})).length).toBe(before);
   });
 
+  it('wizardOpen for the side panel opens no reorder tab', async () => {
+    const before = (await fakeBrowser.tabs.query({})).length;
+    const res = await send({ type: 'wizardOpen', queue: ['a@x.com'], panel: true });
+    expect(res.data).toMatchObject({ phase: 'confirm', queue: ['a@x.com'] });
+    expect(res.data.pageTabId).toBeUndefined();
+    expect((await fakeBrowser.tabs.query({})).length).toBe(before);
+
+    // Same from the panel page itself, without the flag.
+    const again = await send({ type: 'wizardOpen', queue: ['a@x.com'] }, {
+      ...OWN, url: 'chrome-extension://test-extension-id/sidepanel.html',
+    });
+    expect(again.data.pageTabId).toBeUndefined();
+    expect((await fakeBrowser.tabs.query({})).length).toBe(before);
+  });
+
   it('wizardReopen sends the Google tab back to the sign-in page', async () => {
     const { tabId } = await toSigningIn();
     // The user wandered inside Google's sign-in flow.

@@ -16,6 +16,12 @@ describe('parseRequest', () => {
     });
     expect(parseRequest({ type: 'openService', serviceId: 'evil', email: 'a@x.com' })).toBeNull();
     expect(parseRequest({ type: 'wizardOpen', queue: ['B@x.com', 'bad'] })).toEqual({ type: 'wizardOpen', queue: ['b@x.com'] });
+    expect(parseRequest({ type: 'wizardOpen', queue: ['a@x.com'], panel: true })).toEqual({
+      type: 'wizardOpen',
+      queue: ['a@x.com'],
+      panel: true,
+    });
+    expect(parseRequest({ type: 'wizardOpen', queue: ['a@x.com'], panel: 'yes' })).toEqual({ type: 'wizardOpen', queue: ['a@x.com'] });
     expect(parseRequest({ type: 'wizardOpen', queue: [] })).toBeNull();
     expect(parseRequest({ type: 'wizardOpen', queue: 'a@x.com' })).toBeNull();
     expect(parseRequest({ type: 'savePrefs', patch: { pinEnabled: true } })).toEqual({ type: 'savePrefs', patch: { pinEnabled: true } });

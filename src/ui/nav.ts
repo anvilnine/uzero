@@ -14,6 +14,33 @@ export function openOptions(hash = ''): void {
   window.open(url, '_blank', 'noopener');
 }
 
+interface PanelApis {
+  sidePanel?: { open(o: { windowId: number }): Promise<void> };
+  sidebarAction?: { open(): Promise<void> };
+}
+
+/**
+ * Open Lineup's side panel (Chrome) or sidebar (Firefox) next to the page.
+ * Both need a user gesture, so call it first thing in a click handler, before any await.
+ * Returns false when the browser has neither, or no window id is known yet (Chrome).
+ */
+export function openSidePanel(windowId: number | undefined): boolean {
+  const b = ext() as (PanelApis & object) | null;
+  try {
+    if (b?.sidePanel && windowId !== undefined) {
+      b.sidePanel.open({ windowId }).catch(() => {});
+      return true;
+    }
+    if (b?.sidebarAction) {
+      b.sidebarAction.open().catch(() => {});
+      return true;
+    }
+  } catch {
+    /* no gesture, or not allowed here */
+  }
+  return false;
+}
+
 export function closeView(): void {
   window.close();
 }

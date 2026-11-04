@@ -5,7 +5,7 @@ Signed in to several Google accounts? Google numbers them by sign-in order (`/u/
 - **Drag** your accounts into your own order. Add labels and colors.
 - **Pin your #1.** Google links from outside Google (chat apps, bookmarks, typed URLs) open in your #1, or in the account you pick for each service.
 - **Switch this tab** to another account in one click, or with Alt+1…4.
-- **Make it real.** A wizard signs you out, then guides you to sign back in, one account at a time. Google's own order then matches yours.
+- **Make it real.** A guide in the side panel signs you out, then helps you sign back in, one account at a time, right next to Google's sign-in page. Google's own order then matches yours.
 
 Private: no servers, no analytics. See [docs/PRIVACY.md](docs/PRIVACY.md).
 

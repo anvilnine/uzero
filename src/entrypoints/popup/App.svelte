@@ -5,9 +5,7 @@
   import { pinEmail } from '../../lib/accounts';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
-  import Chip from '../../ui/Chip.svelte';
   import Icon from '../../ui/Icon.svelte';
-  import Mark from '../../ui/Mark.svelte';
   import Toggle from '../../ui/Toggle.svelte';
   import AccountSheet from './AccountSheet.svelte';
   import {
@@ -19,7 +17,7 @@
     writeCache,
     type Row,
   } from '../../ui/model';
-  import { closeView, errorText, openOptions, reducedMotion } from '../../ui/nav';
+  import { closeView, errorText, openOptions, openSidePanel, reducedMotion } from '../../ui/nav';
 
   // ---- State ---------------------------------------------------------------
   let api: Api | null = null;
@@ -32,6 +30,8 @@
   let toast = $state('');
   let announce = $state('');
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  /** This popup's window. Chrome's side panel needs it, and must open before any await. */
+  let windowId: number | undefined;
 
   const rows = $derived(app ? lineup(app) : []);
   // Same rule as the pin redirects: the first signed-in account in your order.
@@ -73,6 +73,9 @@
 
   onMount(() => {
     let unsub = () => {};
+    if (typeof browser !== 'undefined' && browser.windows) {
+      browser.windows.getCurrent().then((w) => (windowId = w.id), () => {});
+    }
     (async () => {
       api = await getApi();
       unsub = api.subscribe(accept);
@@ -180,10 +183,12 @@
 
   async function makeItReal() {
     if (!api || !app) return;
+    // The steps sit next to Google's sign-in page in the side panel, when the browser has one.
+    const panel = openSidePanel(windowId);
     try {
       // While a reorder runs, the background keeps it and just brings its page back.
       const queue = reorder?.queue ?? rows.filter((r) => !r.inactive).map((r) => r.email);
-      await api.send({ type: 'wizardOpen', queue });
+      await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
       closeView();
     } catch (e) {
       say(errorText(e));
@@ -335,12 +340,13 @@
   }
 </script>
 
+
 <svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} onpointercancel={onPointerUp} />
 
 <div class="popup" class:is-dragging={!!dragging} class:sheet-open={!!sheetRow}>
   <header class="top">
     <div class="brand">
-      <Mark size={22} />
+      <img src="/icon/32.png" alt="" width="20" height="20" />
       <h1>Lineup</h1>
     </div>
     <div class="tools">
@@ -353,7 +359,7 @@
         onclick={refresh}
         disabled={busy}
       >
-        <Icon name="refresh" size={18} />
+        <Icon name="refresh" size={20} />
       </button>
       <button
         type="button"
@@ -362,25 +368,23 @@
         title="Settings"
         onclick={() => openOptions()}
       >
-        <Icon name="settings" size={18} />
+        <Icon name="settings" size={20} />
       </button>
     </div>
   </header>
 
   {#if fatal && !app}
     <div class="state">
-      <span class="state-icon danger"><Icon name="alert" size={22} /></span>
       <h2>Couldn’t load your accounts</h2>
       <p>{fatal}</p>
-      <button type="button" class="btn btn-primary" onclick={refresh} disabled={busy}>
+      <button type="button" class="btn btn-filled" onclick={refresh} disabled={busy}>
         Try again
       </button>
     </div>
   {:else if !app || (rows.length === 0 && busy)}
-    <div class="sheet-list" aria-busy="true" aria-label="Loading accounts">
+    <div class="card list skeleton-list" aria-busy="true" aria-label="Loading accounts">
       {#each [0, 1, 2] as i (i)}
-        <div class="row skeleton" style:--d="{i * 90}ms">
-          <span class="bone num"></span>
+        <div class="row skeleton">
           <span class="bone av"></span>
           <span class="lines"><span class="bone l1"></span><span class="bone l2"></span></span>
         </div>
@@ -388,20 +392,19 @@
     </div>
   {:else if rows.length === 0}
     <div class="state">
-      <span class="state-icon"><Mark size={36} /></span>
       <h2>No Google accounts found</h2>
-      <p>Sign in at google.com, then reopen Lineup.</p>
-      <a class="btn btn-primary" href="https://accounts.google.com/" target="_blank" rel="noreferrer">
+      <p>Sign in to Google, then open Lineup again.</p>
+      <a class="btn btn-filled" href="https://accounts.google.com/" target="_blank" rel="noreferrer">
         Sign in to Google
       </a>
     </div>
   {:else}
-    <section class="pin" class:on={app.prefs.pinEnabled}>
+    <section class="card pin">
       <div class="pin-text">
-        <span class="pin-title" id="pin-title">Pin your #1</span>
+        <span class="pin-title" id="pin-title">Pin default account</span>
         <span class="pin-desc" id="pin-desc">
           {#if app.prefs.pinEnabled && first}
-            Links that name no account open as {first.meta.label ?? first.name}.
+            Links without an account open as {first.meta.label ?? first.name}.
           {:else}
             Google picks the account for links.
           {/if}
@@ -409,7 +412,7 @@
       </div>
       <Toggle
         checked={app.prefs.pinEnabled}
-        label="Pin your #1"
+        label="Pin default account"
         describedby="pin-desc"
         onchange={togglePin}
       />
@@ -418,20 +421,20 @@
     {#if statusError}
       <div class="banner" role="status">
         <span>Couldn’t refresh. {statusError}</span>
-        <button type="button" class="link" onclick={refresh} disabled={busy}>Retry</button>
+        <button type="button" class="btn btn-text" onclick={refresh} disabled={busy}>Retry</button>
       </div>
     {/if}
 
     <p class="caption" id="row-hint">
       {#if canSwitch}
-        Pick an account to reopen this {tabService} tab.
+        Choose an account to reopen this {tabService} tab.
       {:else}
-        Open a Google page to switch accounts here.
+        Open a Google page to switch its account here.
       {/if}
     </p>
 
     <div class="scroller" bind:this={scroller}>
-      <ol class="sheet-list" bind:this={listEl} aria-label="Your account order">
+      <ol class="card list" bind:this={listEl} aria-label="Your account order">
         {#each rows as r (r.email)}
           <li
             class="row-wrap"
@@ -440,7 +443,7 @@
             animate:flip={flipFor(r.email)}
             onpointerdown={(e) => onPointerDown(e, r)}
           >
-            <div class="row" class:inactive={r.inactive} class:here={tab?.email === r.email}>
+            <div class="row" class:inactive={r.inactive}>
               <button
                 type="button"
                 class="row-main"
@@ -450,8 +453,9 @@
                 onclick={() => switchTo(r)}
                 onkeydown={(e) => onRowKey(e, r)}
               >
-                <span class="slot figure" class:lead={r.slot === 1} aria-hidden="true">
-                  {r.slot}
+                <span class="slot" aria-hidden="true">
+                  <span class="num">{r.slot}</span>
+                  <span class="grip"><Icon name="grip" size={16} /></span>
                 </span>
                 <span class="sr-only">Number {r.slot}.</span>
                 <span class="av">
@@ -470,17 +474,19 @@
                 <span class="text">
                   <span class="line1">
                     <span class="name">{r.name}</span>
-                    {#if r.meta.label}<Chip text={r.meta.label} tone={toneOf(r)} />{/if}
+                    {#if r.meta.label}
+                      <span class="label"><span class="dot tone-{toneOf(r)}"></span>{r.meta.label}</span>
+                    {/if}
+                    {#if first?.email === r.email}<span class="default">Default</span>{/if}
                   </span>
                   <span class="line2">
                     <span class="email">{r.email}</span>
                     {#if r.inactive}
-                      <span class="tag">Signed out</span>
+                      <span class="extra">· Signed out</span>
                     {:else if r.account && r.account.index !== r.slot - 1}
-                      <span
-                        class="tag"
-                        title="Google lists this account as /u/{r.account.index}"
-                      >Google #{r.account.index + 1}</span>
+                      <span class="extra" title="Google lists this account as /u/{r.account.index}"
+                        >· Google: {r.account.index + 1}</span
+                      >
                     {/if}
                   </span>
                 </span>
@@ -492,14 +498,14 @@
                 aria-haspopup="dialog"
                 onclick={() => (sheetFor = r.email)}
               >
-                <Icon name="more" size={18} />
+                <Icon name="more" size={20} />
               </button>
             </div>
           </li>
         {/each}
       </ol>
       {#if rows.length > 1}
-        <p class="keys" id="row-keys">Drag to reorder, or focus one and press Alt + ↑ ↓</p>
+        <p class="keys" id="row-keys">Drag to reorder, or press Alt + ↑ ↓</p>
       {/if}
     </div>
 
@@ -513,29 +519,26 @@
           {/if}
         </p>
         <div class="foot-actions">
-          <button type="button" class="btn btn-quiet" onclick={cancelReorder}>Cancel</button>
-          <button type="button" class="btn btn-primary real" onclick={makeItReal}>
-            <Icon name="sync" size={18} />
-            Resume
-          </button>
+          <button type="button" class="btn btn-text" onclick={cancelReorder}>Cancel</button>
+          <button type="button" class="btn btn-tonal" onclick={makeItReal}>Resume</button>
         </div>
       {:else}
         <p>
           {#if inSync}
             Google already uses this order.
           {:else}
-            Google’s own order is different.
+            Google’s order differs.
           {/if}
         </p>
         <button
           type="button"
-          class="btn real"
-          class:btn-primary={!inSync}
+          class="btn"
+          class:btn-tonal={!inSync}
+          class:btn-text={inSync}
           onclick={makeItReal}
           disabled={activeCount === 0}
         >
-          <Icon name="sync" size={18} />
-          Make it real
+          Reorder in Google…
         </button>
       {/if}
     </footer>
@@ -565,6 +568,7 @@
   }
   :global(body) {
     overflow: hidden;
+    background: var(--surface-container);
   }
 
   .popup {
@@ -574,7 +578,8 @@
     width: 360px;
     max-height: 560px;
     min-height: 240px;
-    background: var(--paper);
+    padding-bottom: 8px;
+    background: var(--surface-container);
   }
   .sheet-open {
     min-height: 500px;
@@ -584,24 +589,32 @@
     user-select: none;
   }
 
+  .card {
+    background: var(--surface);
+    border-radius: var(--r-lg);
+  }
+
   /* Header ------------------------------------------------------------- */
   .top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 8px 6px 16px;
+    padding: 8px 8px 4px 16px;
   }
   .brand {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
+  }
+  .brand img {
+    display: block;
+    border-radius: 4px;
   }
   h1 {
     margin: 0;
-    font-family: var(--font-figure);
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: var(--t-lg);
+    font-weight: 400;
+    line-height: 24px;
   }
   .tools {
     display: flex;
@@ -619,15 +632,9 @@
   .pin {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin: 4px 12px 0;
-    padding: 10px 14px;
-    border-radius: var(--r-lg);
-    background: var(--sunk);
-    transition: background var(--dur) var(--ease);
-  }
-  .pin.on {
-    background: var(--jersey-soft);
+    gap: 16px;
+    margin: 4px 8px 0;
+    padding: 12px 16px;
   }
   .pin-text {
     flex: 1;
@@ -635,23 +642,12 @@
     min-width: 0;
   }
   .pin-title {
-    font-weight: 650;
-    font-size: var(--t-md);
+    font-weight: 500;
   }
   .pin-desc {
-    color: var(--ink-2);
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
-
-
-    text-wrap: pretty;
-  }
-  .pin.on .pin-desc {
-    color: color-mix(in oklab, var(--jersey-ink) 70%, var(--ink-2));
-  }
-  @media (prefers-color-scheme: dark) {
-    .pin.on .pin-desc {
-      color: var(--ink-2);
-    }
+    line-height: 16px;
   }
 
   .banner {
@@ -659,27 +655,20 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin: 8px 12px 0;
-    padding: 8px 12px;
-    border-radius: var(--r-md);
-    background: var(--danger-soft);
-    color: var(--danger);
+    margin: 8px 8px 0;
+    padding: 4px 4px 4px 16px;
+    border-radius: var(--r-lg);
+    background: var(--surface-container-high);
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
-  }
-  .link {
-    border: 0;
-    background: none;
-    padding: 4px;
-    font-weight: 650;
-    color: inherit;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    line-height: 16px;
   }
 
   .caption {
-    margin: 14px 16px 6px;
-    color: var(--ink-2);
+    margin: 16px 16px 8px;
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
+    line-height: 16px;
   }
 
   /* List --------------------------------------------------------------- */
@@ -687,67 +676,53 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 12px 4px;
+    padding: 0 8px;
     scrollbar-width: thin;
   }
-  .sheet-list {
+  .list {
     position: relative;
     list-style: none;
     margin: 0;
-    padding: 0;
-    border-radius: var(--r-lg);
-    background: var(--sheet);
-    box-shadow: inset 0 0 0 1px var(--line);
-  }
-  .popup > .sheet-list {
-    margin: 12px;
+    padding: 4px;
   }
   .row-wrap {
     position: relative;
     transform: translateY(var(--lift));
     touch-action: none;
   }
-  .row-wrap + .row-wrap .row::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 48px;
-    right: 12px;
-    border-top: 1px solid var(--line);
-  }
   .row-wrap.dragging {
     z-index: 2;
   }
   .row-wrap.dragging .row {
-    background: var(--sheet-raised);
-    border-radius: var(--r-lg);
-    box-shadow: var(--shadow-lift);
-    transform: scale(1.02);
-  }
-  .row-wrap.dragging .row::before,
-  .row-wrap.dragging + .row-wrap .row::before {
-    border-color: transparent;
+    background: var(--surface);
+    box-shadow: var(--shadow-menu);
   }
   .row {
     position: relative;
     display: flex;
     align-items: center;
-    height: 62px;
-    padding-right: 4px;
-    transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+    height: 56px;
+    border-radius: var(--r-md);
+    transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .row:hover {
+    background: var(--hover);
+  }
+  .is-dragging .row:hover {
+    background: none;
   }
   .row-main {
     flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     height: 100%;
-    padding: 0 4px 0 10px;
+    padding: 0 4px 0 8px;
     border: 0;
     background: none;
     text-align: left;
-    border-radius: var(--r-lg);
+    border-radius: var(--r-md);
     cursor: pointer;
   }
   .is-dragging .row-main {
@@ -759,70 +734,97 @@
   .row-main:focus-visible {
     outline-offset: -2px;
   }
-  .row:not(.inactive):hover .name {
-    text-decoration: underline;
-    text-decoration-color: var(--line-strong);
-    text-underline-offset: 3px;
-  }
-  .row-main[aria-disabled='true'] .name {
-    text-decoration: none !important;
-  }
 
   .slot {
+    position: relative;
     flex: none;
-    display: inline-grid;
+    display: grid;
     place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    font-size: 17px;
-    color: var(--ink-3);
-    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+    width: 16px;
+    height: 24px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    font-variant-numeric: tabular-nums;
   }
-  .slot.lead {
-    background: var(--jersey);
-    color: var(--jersey-ink);
-    font-weight: 600;
+  .num,
+  .grip {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
+    transition: opacity var(--dur) var(--ease);
+  }
+  .grip {
+    opacity: 0;
+  }
+  .row:hover .grip,
+  .row:focus-within .grip,
+  .dragging .grip {
+    opacity: 1;
+  }
+  .row:hover .num,
+  .row:focus-within .num,
+  .dragging .num {
+    opacity: 0;
   }
 
   .text {
     flex: 1;
     min-width: 0;
     display: grid;
-    gap: 2px;
   }
   .line1,
   .line2 {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
   }
+  .line2 {
+    gap: 4px;
+  }
   .name {
-    font-weight: 620;
-    letter-spacing: -0.005em;
+    min-width: 0;
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-width: 0;
   }
-  .email {
-    flex: 1;
-    min-width: 0;
-    color: var(--ink-2);
+  .label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    max-width: 8.5em;
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .tag {
+  .label .dot {
+    width: 6px;
+    height: 6px;
+  }
+  .default {
     flex: none;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    color: var(--ink-3);
-    padding: 1px 6px;
-    border-radius: var(--r-sm);
-    box-shadow: inset 0 0 0 1px var(--line-strong);
+    margin-left: auto;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+  }
+  .email,
+  .extra {
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 16px;
+    white-space: nowrap;
+  }
+  .email {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .extra {
+    flex: none;
   }
   .av {
     position: relative;
@@ -831,54 +833,46 @@
   }
   .here-dot {
     position: absolute;
-    right: -2px;
-    bottom: -2px;
-    width: 12px;
-    height: 12px;
+    right: -1px;
+    bottom: -1px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: var(--ok);
-    box-shadow: 0 0 0 2.5px var(--sheet);
+    background: var(--primary);
+    box-shadow: 0 0 0 2px var(--surface);
   }
-  .inactive .name,
-  .inactive .email {
-    color: var(--ink-3);
-  }
-  .inactive .slot {
-    opacity: 0.6;
+  .inactive .name {
+    color: var(--on-surface-variant);
+    font-weight: 400;
   }
   .row-menu {
     flex: none;
-    width: 36px;
-    height: 44px;
   }
 
   .keys {
-    margin: 8px 4px 4px;
-    color: var(--ink-3);
-    font-size: var(--t-xs);
-    text-align: center;
+    margin: 8px 8px 0;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 16px;
   }
 
   /* Skeleton ----------------------------------------------------------- */
+  .skeleton-list {
+    margin: 8px;
+  }
   .skeleton {
-    gap: 10px;
+    gap: 12px;
     padding: 0 12px;
   }
   .bone {
     display: block;
-    background: var(--sunk);
-    border-radius: 6px;
-    animation: pulse 1.4s ease-in-out infinite;
-    animation-delay: var(--d);
-  }
-  .bone.num {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
+    background: var(--surface-container-high);
+    border-radius: 4px;
+    animation: pulse 1.6s ease-in-out infinite;
   }
   .bone.av {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
   }
   .lines {
@@ -887,16 +881,16 @@
     flex: 1;
   }
   .bone.l1 {
-    width: 46%;
-    height: 11px;
+    width: 40%;
+    height: 10px;
   }
   .bone.l2 {
-    width: 70%;
-    height: 9px;
+    width: 64%;
+    height: 8px;
   }
   @keyframes pulse {
     50% {
-      opacity: 0.45;
+      opacity: 0.5;
     }
   }
 
@@ -904,88 +898,66 @@
   .state {
     display: grid;
     justify-items: center;
-    gap: 6px;
-    padding: 36px 32px 40px;
+    gap: 8px;
+    margin: 8px;
+    padding: 32px 24px;
+    border-radius: var(--r-lg);
+    background: var(--surface);
     text-align: center;
   }
   .state h2 {
-    margin: 8px 0 0;
-    font-family: var(--font-figure);
-    font-size: var(--t-xl);
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    margin: 0;
+    font-size: var(--t-lg);
+    font-weight: 400;
+    line-height: 24px;
   }
   .state p {
-    text-wrap: balance;
-    margin: 0 0 14px;
-    color: var(--ink-2);
+    margin: 0 0 12px;
+    color: var(--on-surface-variant);
     max-width: 30ch;
-  }
-  .state .btn {
-    text-decoration: none;
-  }
-  .state-icon {
-    display: grid;
-    place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--sunk);
-  }
-  .state-icon.danger {
-    background: var(--danger-soft);
-    color: var(--danger);
+    text-wrap: balance;
   }
 
   /* Footer ------------------------------------------------------------- */
   .foot {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px 12px 16px;
-    border-top: 1px solid var(--line);
-    margin-top: 6px;
-  }
-  .foot {
     justify-content: space-between;
+    gap: 12px;
+    padding: 12px 8px 0 16px;
   }
   .foot p {
     margin: 0;
-    color: var(--ink-2);
+    color: var(--on-surface-variant);
     font-size: var(--t-sm);
-    line-height: 1.35;
+    line-height: 16px;
   }
-  .real {
+  .foot .btn {
     flex: none;
-    min-height: 40px;
+    padding: 0 16px;
   }
   .foot-actions {
     display: flex;
     flex: none;
-    gap: 6px;
-  }
-  .foot-actions .btn {
-    min-height: 40px;
+    gap: 4px;
   }
 
   .toast {
     position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 70px;
-    padding: 10px 14px;
-    border-radius: var(--r-md);
-    background: var(--action);
-    color: var(--on-action);
-    font-size: var(--t-sm);
-    box-shadow: var(--shadow-pop);
+    left: 8px;
+    right: 8px;
+    bottom: 64px;
+    padding: 14px 16px;
+    border-radius: 4px;
+    background: var(--inverse-surface);
+    color: var(--inverse-on-surface);
+    font-size: var(--t-md);
+    box-shadow: var(--shadow-menu);
     opacity: 0;
-    transform: translateY(6px);
     pointer-events: none;
-    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+    transition: opacity var(--dur) var(--ease);
   }
   .toast.show {
     opacity: 1;
-    transform: none;
   }
 </style>

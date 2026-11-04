@@ -37,7 +37,8 @@ export function parseRequest(msg: unknown): Request | null {
     case 'wizardOpen': {
       if (!Array.isArray(m.queue)) return null;
       const queue = sanitizeEmails(m.queue);
-      return queue.length > 0 ? { type, queue } : null;
+      if (queue.length === 0) return null;
+      return m.panel === true ? { type, queue, panel: true } : { type, queue };
     }
     default:
       return null;

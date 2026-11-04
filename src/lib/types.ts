@@ -128,8 +128,11 @@ export type Request =
   | { type: 'listServices' }
   /** Can the active tab be switched? Returns its service id or null. */
   | { type: 'activeTabService' }
-  /** Open the reorder page. While a reorder runs, focuses its page and keeps its state. */
-  | { type: 'wizardOpen'; queue: string[] }
+  /**
+   * Open the reorder page. While a reorder runs, focuses its page and keeps its state.
+   * `panel`: the steps show in the browser's side panel, so no reorder tab is opened.
+   */
+  | { type: 'wizardOpen'; queue: string[]; panel?: boolean }
   | { type: 'wizardBegin' }
   | { type: 'wizardSkip' }
   | { type: 'wizardRetry' }
