@@ -25,3 +25,6 @@ web-ext.config.ts
 *.sln
 *.sw?
 .vitest
+
+# Icon exploration renders (large; kept locally)
+design/icon/round*/

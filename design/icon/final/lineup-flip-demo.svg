@@ -1,0 +1,345 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Lineup (flip demo)</title>
+  <style>
+    /* Card 4 flips 0 -> # -> 1 -> 0 in ~1.2 s, then holds. Loop 4 s.
+       Halves fold about the split line (card-local y=144) with scaleY,
+       a cheap stand-in for rotateX. */
+    #flap-4 .flap-top, #flap-4 .flap-bottom, #flap-4 .shade {
+      transform-box: view-box;
+      transform-origin: 0 144px;
+      animation-duration: 4s;
+      animation-iteration-count: infinite;
+      animation-fill-mode: both;
+    }
+    #flap-4 .flap-halo { animation: halo 4s infinite both; }
+    @keyframes halo {
+      0%, 15% { opacity: .85; }
+      17.5%, 40% { opacity: .2; }
+      51.25%, 100% { opacity: .85; }
+    }
+    #flap-4 .flap-top.state-0 { animation-name: fold-0; }
+    @keyframes fold-0 {
+      0%, 15% { transform: scaleY(1); animation-timing-function: cubic-bezier(.5,0,.9,.5); }
+      20%, 100% { transform: scaleY(0); }
+    }
+    #flap-4 .flap-top.state-0 .shade { animation-name: fold-shade-0; }
+    @keyframes fold-shade-0 {
+      0%, 15% { opacity: 0; animation-timing-function: ease-in; }
+      20%, 100% { opacity: .45; }
+    }
+    #flap-4 .flap-top.state-1 { animation-name: fold-1; }
+    @keyframes fold-1 {
+      0%, 25% { transform: scaleY(1); animation-timing-function: cubic-bezier(.5,0,.9,.5); }
+      30%, 100% { transform: scaleY(0); }
+    }
+    #flap-4 .flap-top.state-1 .shade { animation-name: fold-shade-1; }
+    @keyframes fold-shade-1 {
+      0%, 25% { opacity: 0; animation-timing-function: ease-in; }
+      30%, 100% { opacity: .45; }
+    }
+    #flap-4 .flap-bottom.state-1 { animation-name: unfold-1; }
+    @keyframes unfold-1 {
+      0%, 20% { transform: scaleY(0); animation-timing-function: cubic-bezier(.1,.5,.5,1); }
+      25%, 100% { transform: scaleY(1); }
+    }
+    #flap-4 .flap-bottom.state-1 .shade { animation-name: unfold-shade-1; }
+    @keyframes unfold-shade-1 {
+      0%, 20% { opacity: .45; animation-timing-function: ease-out; }
+      25%, 100% { opacity: 0; }
+    }
+    #flap-4 .flap-top.state-2 { animation-name: fold-2; }
+    @keyframes fold-2 {
+      0%, 35% { transform: scaleY(1); animation-timing-function: cubic-bezier(.5,0,.9,.5); }
+      40%, 100% { transform: scaleY(0); }
+    }
+    #flap-4 .flap-top.state-2 .shade { animation-name: fold-shade-2; }
+    @keyframes fold-shade-2 {
+      0%, 35% { opacity: 0; animation-timing-function: ease-in; }
+      40%, 100% { opacity: .45; }
+    }
+    #flap-4 .flap-bottom.state-2 { animation-name: unfold-2; }
+    @keyframes unfold-2 {
+      0%, 30% { transform: scaleY(0); animation-timing-function: cubic-bezier(.1,.5,.5,1); }
+      35%, 100% { transform: scaleY(1); }
+    }
+    #flap-4 .flap-bottom.state-2 .shade { animation-name: unfold-shade-2; }
+    @keyframes unfold-shade-2 {
+      0%, 30% { opacity: .45; animation-timing-function: ease-out; }
+      35%, 100% { opacity: 0; }
+    }
+    #flap-4 .flap-bottom.state-3 { animation-name: unfold-3; }
+    @keyframes unfold-3 {
+      0%, 40% { transform: scaleY(0); animation-timing-function: cubic-bezier(.1,.5,.5,1); }
+      45%, 100% { transform: scaleY(1); }
+    }
+    #flap-4 .flap-bottom.state-3 .shade { animation-name: unfold-shade-3; }
+    @keyframes unfold-shade-3 {
+      0%, 40% { opacity: .45; animation-timing-function: ease-out; }
+      45%, 100% { opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #flap-4 * { animation: none !important; }
+    }
+  </style>
+  <defs>
+    <!-- ===== shapes ===== -->
+    <path id="tile-shape" d="M351.59,0L672.41,0C773.65,0 824.27,0 869.92,15.06L878.76,17.23C938.25,38.88 985.12,85.75 1006.77,145.24L1008.94,154.08C1024,199.73 1024,250.35 1024,351.59L1024,672.41C1024,773.65 1024,824.27 1008.94,869.92L1006.77,878.76C985.12,938.25 938.25,985.12 878.76,1006.77L869.92,1008.94C824.27,1024 773.65,1024 672.41,1024L351.59,1024C250.35,1024 199.73,1024 154.08,1008.94L145.24,1006.77C85.75,985.12 38.88,938.25 17.23,878.76L15.06,869.92C0,824.27 0,773.65 0,672.41L0,351.59C0,250.35 0,199.73 15.06,154.08L17.23,145.24C38.88,85.75 85.75,38.88 145.24,17.23L154.08,15.06C199.73,0 250.35,0 351.59,0Z"/>
+    <path id="window-shape" d="M82,374A28,28 0 0 1 110,346H914A28,28 0 0 1 942,374V644A28,28 0 0 1 914,672H110A28,28 0 0 1 82,644Z"/>
+    <clipPath id="clip-tile"><use href="#tile-shape"/></clipPath>
+    <clipPath id="clip-window"><use href="#window-shape"/></clipPath>
+
+    <!-- card-local halves (card = 202x288, split at y=144) -->
+    <path id="card-top-half" d="M0,16A16,16 0 0 1 16,0H186A16,16 0 0 1 202,16V143H0Z"/>
+    <path id="card-bottom-half" d="M0,145H202V272A16,16 0 0 1 186,288H16A16,16 0 0 1 0,272Z"/>
+    <clipPath id="clip-top"><use href="#card-top-half"/></clipPath>
+    <clipPath id="clip-bottom"><use href="#card-bottom-half"/></clipPath>
+
+    <!-- glyphs, card-local, optically centred on (101,144) -->
+    <path id="glyph-slash" d="M116.5,51H157.5L85.5,237H44.5Z"/>
+    <path id="glyph-u" d="M42,90H79V167A22,24.96 0 0 0 123,167V90H160V226H123V221.74A59,59 0 0 1 42,167Z"/>
+    <path id="glyph-0" d="M37,130.36A64,79.36 0 0 1 101,51H101A64,79.36 0 0 1 165,130.36V157.64A64,79.36 0 0 1 101,237H101A64,79.36 0 0 1 37,157.64ZM75,118.32V169.68A26,34.32 0 0 0 101,204H101A26,34.32 0 0 0 127,169.68V118.32A26,34.32 0 0 0 101,84H101A26,34.32 0 0 0 75,118.32Z"/>
+    <path id="glyph-hash" d="M58,56H86L66,232H38ZM136,56H164L144,232H116ZM35,100H167V128H35ZM35,160H167V188H35Z"/>
+    <path id="glyph-1" d="M81,51H119V237H81V105L45,125V89Z"/>
+
+    <!-- ===== tile paint ===== -->
+    <linearGradient id="tile-fill" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#DA5C12"/>
+      <stop offset=".5" stop-color="#D5590F"/>
+      <stop offset="1" stop-color="#CC530B"/>
+    </linearGradient>
+    <radialGradient id="tile-sheen" cx="512" cy="40" r="560" gradientTransform="translate(0 40) scale(1 .62) translate(0 -40)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD4A8" stop-opacity=".16"/>
+      <stop offset=".5" stop-color="#FFC48E" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#FFC48E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tile-rim" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC9A0" stop-opacity=".75"/>
+      <stop offset=".08" stop-color="#FFB585" stop-opacity=".12"/>
+      <stop offset=".2" stop-color="#FFB585" stop-opacity="0"/>
+      <stop offset=".6" stop-color="#7A2600" stop-opacity="0"/>
+      <stop offset="1" stop-color="#6A1F00" stop-opacity=".55"/>
+    </linearGradient>
+    <linearGradient id="tile-edge" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD6B4" stop-opacity=".85"/>
+      <stop offset=".25" stop-color="#FFD6B4" stop-opacity="0"/>
+      <stop offset=".8" stop-color="#FFB27A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFB27A" stop-opacity=".5"/>
+    </linearGradient>
+    <filter id="soft-12" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="soft-8" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="soft-4" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="soft-2" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>
+    <!-- enamel body: soft vignette, darker toward the lower edges (no noise) -->
+    <radialGradient id="tile-body" cx="512" cy="380" r="720" gradientUnits="userSpaceOnUse">
+      <stop offset=".55" stop-color="#7A2400" stop-opacity="0"/>
+      <stop offset="1" stop-color="#7A2400" stop-opacity=".22"/>
+    </radialGradient>
+
+    <!-- ===== window paint ===== -->
+    <linearGradient id="window-fill" x1="0" y1="346" x2="0" y2="672" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5A2104"/>
+      <stop offset=".5" stop-color="#7A2E05"/>
+      <stop offset="1" stop-color="#9A3D08"/>
+    </linearGradient>
+
+    <!-- ===== card paint (card-local) ===== -->
+    <linearGradient id="paper-top" x1="0" y1="0" x2="0" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7E7C6"/>
+      <stop offset=".05" stop-color="#F0DBB3"/>
+      <stop offset=".86" stop-color="#E9D1A5"/>
+      <stop offset="1" stop-color="#DCC193"/>
+    </linearGradient>
+    <linearGradient id="paper-bottom" x1="0" y1="144" x2="0" y2="288" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8EBCF"/>
+      <stop offset=".07" stop-color="#ECD6AC"/>
+      <stop offset=".88" stop-color="#E2C99B"/>
+      <stop offset="1" stop-color="#D3B788"/>
+    </linearGradient>
+    <linearGradient id="paper-top-lit" x1="0" y1="0" x2="0" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF7E2"/>
+      <stop offset=".3" stop-color="#FBEDCD"/>
+      <stop offset=".86" stop-color="#F4E2BC"/>
+      <stop offset="1" stop-color="#E7D0A3"/>
+    </linearGradient>
+    <linearGradient id="paper-bottom-lit" x1="0" y1="144" x2="0" y2="288" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF5E0"/>
+      <stop offset=".07" stop-color="#F6E7C6"/>
+      <stop offset=".88" stop-color="#EDDAB2"/>
+      <stop offset="1" stop-color="#E0C89C"/>
+    </linearGradient>
+    <radialGradient id="lit-glow" cx="101" cy="0" r="150" gradientTransform="translate(101 0) scale(1 .7) translate(-101 0)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFBEA" stop-opacity=".95"/>
+      <stop offset=".5" stop-color="#FFF5D8" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#FFF5D8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lit-halo" cx="101" cy="-2" r="130" gradientTransform="translate(101 -2) scale(1 .22) translate(-101 2)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFEBB0" stop-opacity="1"/>
+      <stop offset=".55" stop-color="#FFC765" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#FF9A3A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#24211E"/>
+      <stop offset=".28" stop-color="#6E685F"/>
+      <stop offset=".45" stop-color="#B9B3A8"/>
+      <stop offset=".62" stop-color="#5A554D"/>
+      <stop offset="1" stop-color="#1A1816"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ================= TILE ================= -->
+  <g id="tile">
+    <use href="#tile-shape" fill="url(#tile-fill)"/>
+    <g clip-path="url(#clip-tile)">
+      <use href="#tile-shape" fill="url(#tile-body)"/>
+      <use href="#tile-shape" fill="url(#tile-sheen)"/>
+      <!-- soft pillowed inner edge -->
+      <use href="#tile-shape" fill="none" stroke="url(#tile-rim)" stroke-width="44" filter="url(#soft-12)"/>
+      <!-- crisp hairline rim -->
+      <use href="#tile-shape" fill="none" stroke="url(#tile-edge)" stroke-width="5"/>
+    </g>
+  </g>
+
+  <!-- ================= WINDOW (recess) ================= -->
+  <g id="window">
+    <!-- bevel: dark lip above, lit lip below -->
+    <use href="#window-shape" transform="translate(0 -4)" fill="#7E2C04" opacity=".55" filter="url(#soft-2)"/>
+    <use href="#window-shape" transform="translate(0 5)" fill="#FFB27A" opacity=".85" filter="url(#soft-2)"/>
+    <use href="#window-shape" fill="url(#window-fill)"/>
+    <g clip-path="url(#clip-window)">
+      <!-- lit lower inner wall -->
+      <use href="#window-shape" transform="translate(0 -6)" fill="none" stroke="#C4520F" stroke-width="10" opacity=".75" filter="url(#soft-4)"/>
+      <!-- inner shadow, heavier at the top -->
+      <use href="#window-shape" transform="translate(0 9)" fill="none" stroke="#200800" stroke-width="30" opacity=".75" filter="url(#soft-8)"/>
+    </g>
+  </g>
+
+  <g id="flaps">
+  <!-- flap 1: "slash" -->
+  <g id="flap-1" class="flap" transform="translate(93 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 2: "u" -->
+  <g id="flap-2" class="flap" transform="translate(305 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-u" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-u" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 3: "slash" -->
+  <g id="flap-3" class="flap" transform="translate(517 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 4: animated. Tops stack latest-underneath (the folding one is on
+       top); bottoms stack latest-on-top (the unfolding one covers the old). -->
+  <g id="flap-4" class="flap flap--chosen" transform="translate(729 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <ellipse class="flap-halo" cx="101" cy="-2" rx="120" ry="22" fill="url(#lit-halo)" opacity=".85" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top state-3" clip-path="url(#clip-top)"><!-- "0" top -->
+      <use href="#card-top-half" fill="url(#paper-top-lit)"/>
+      <rect width="202" height="144" fill="url(#lit-glow)"/>
+      <use href="#glyph-0" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+      <rect class="shade" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-top state-2" clip-path="url(#clip-top)"><!-- "1" top -->
+      <use href="#card-top-half" fill="url(#paper-top-lit)"/>
+      <rect width="202" height="144" fill="url(#lit-glow)"/>
+      <use href="#glyph-1" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+      <rect class="shade" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-top state-1" clip-path="url(#clip-top)"><!-- "#" top -->
+      <use href="#card-top-half" fill="url(#paper-top-lit)"/>
+      <rect width="202" height="144" fill="url(#lit-glow)"/>
+      <use href="#glyph-hash" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+      <rect class="shade" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-top state-0" clip-path="url(#clip-top)"><!-- "0" top -->
+      <use href="#card-top-half" fill="url(#paper-top-lit)"/>
+      <rect width="202" height="144" fill="url(#lit-glow)"/>
+      <use href="#glyph-0" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+      <rect class="shade" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-bottom state-0" clip-path="url(#clip-bottom)"><!-- "0" bottom -->
+      <use href="#card-bottom-half" fill="url(#paper-bottom-lit)"/>
+      <use href="#glyph-0" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+      <rect class="shade" y="144" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-bottom state-1" clip-path="url(#clip-bottom)"><!-- "#" bottom -->
+      <use href="#card-bottom-half" fill="url(#paper-bottom-lit)"/>
+      <use href="#glyph-hash" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+      <rect class="shade" y="144" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-bottom state-2" clip-path="url(#clip-bottom)"><!-- "1" bottom -->
+      <use href="#card-bottom-half" fill="url(#paper-bottom-lit)"/>
+      <use href="#glyph-1" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+      <rect class="shade" y="144" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-bottom state-3" clip-path="url(#clip-bottom)"><!-- "0" bottom -->
+      <use href="#card-bottom-half" fill="url(#paper-bottom-lit)"/>
+      <use href="#glyph-0" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+      <rect class="shade" y="144" width="202" height="144" fill="#2A1404" opacity="0"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  </g>
+</svg>

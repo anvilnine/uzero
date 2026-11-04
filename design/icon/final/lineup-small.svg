@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Lineup (small)</title>
+  <!-- Simplified mark for 16/32/48 px: no pins, no recess, flat shading. -->
+  <defs>
+    <linearGradient id="tile-fill" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E0631A"/>
+      <stop offset="1" stop-color="#CC520B"/>
+    </linearGradient>
+    <linearGradient id="paper-1" x1="0" y1="140" x2="0" y2="884" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF4DA"/>
+      <stop offset="1" stop-color="#F1DDB4"/>
+    </linearGradient>
+  </defs>
+  <path id="tile" d="M351.59,0L672.41,0C773.65,0 824.27,0 869.92,15.06L878.76,17.23C938.25,38.88 985.12,85.75 1006.77,145.24L1008.94,154.08C1024,199.73 1024,250.35 1024,351.59L1024,672.41C1024,773.65 1024,824.27 1008.94,869.92L1006.77,878.76C985.12,938.25 938.25,985.12 878.76,1006.77L869.92,1008.94C824.27,1024 773.65,1024 672.41,1024L351.59,1024C250.35,1024 199.73,1024 154.08,1008.94L145.24,1006.77C85.75,985.12 38.88,938.25 17.23,878.76L15.06,869.92C0,824.27 0,773.65 0,672.41L0,351.59C0,250.35 0,199.73 15.06,154.08L17.23,145.24C38.88,85.75 85.75,38.88 145.24,17.23L154.08,15.06C199.73,0 250.35,0 351.59,0Z" fill="url(#tile-fill)"/>
+  <!-- card 1: "0" -->
+  <g id="card-1">
+    <rect x="226" y="150" width="572" height="752" rx="90" fill="#5A1E02" opacity=".55"/>
+    <rect x="232" y="140" width="560" height="744" rx="84" fill="url(#paper-1)"/>
+    <!-- split line (under the glyph so the counter stays clean) -->
+    <rect x="232" y="500" width="560" height="24" fill="#9A5A24"/>
+    <path d="M355.2,454.64A156.8,188.16 0 0 1 512,266.48H512A156.8,188.16 0 0 1 668.8,454.64V569.36A156.8,188.16 0 0 1 512,757.52H512A156.8,188.16 0 0 1 355.2,569.36ZM461.82,419.64V604.36A50.18,62.22 0 0 0 512,666.58H512A50.18,62.22 0 0 0 562.18,604.36V419.64A50.18,62.22 0 0 0 512,357.42H512A50.18,62.22 0 0 0 461.82,419.64Z" fill="#24201C"/>
+  </g>
+</svg>
