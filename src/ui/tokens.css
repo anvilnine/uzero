@@ -1,0 +1,283 @@
+/*
+  Lineup design tokens.
+  Direction: a quiet "running order" sheet. Cool sage paper, green-black ink,
+  serif ordinals in the gutter, and one jersey-yellow mark for your #1.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --paper: #eef1ec;
+  --sheet: #fbfcfa;
+  --sheet-raised: #ffffff;
+  --sunk: #e4e9e2;
+  --line: #d9dfd6;
+  --line-strong: #c3ccc0;
+
+  /* Ink */
+  --ink: #17221e;
+  --ink-2: #4c5953;
+  --ink-3: #78847e;
+  --ink-inverse: #f4f7f2;
+
+  /* The one accent: the leader's jersey */
+  --jersey: #f2c230;
+  --jersey-soft: #fbedb9;
+  --jersey-ink: #3d3000;
+
+  /* Function */
+  --action: #17221e;
+  --action-hover: #2a3a34;
+  --on-action: #f4f7f2;
+  --toggle-on: #17221e;
+  --focus: #1d7a63;
+  --ok: #23845c;
+  --danger: #b3261e;
+  --danger-soft: #fbe4e1;
+  --warn-soft: #fbf1d4;
+
+  --shadow-lift: 0 1px 2px rgb(23 34 30 / 0.08), 0 10px 28px -6px rgb(23 34 30 / 0.22);
+  --shadow-pop: 0 1px 1px rgb(23 34 30 / 0.06), 0 18px 40px -10px rgb(23 34 30 / 0.28);
+
+  /* Label tones */
+  --tone-slate: #64748b;
+  --tone-red: #d24646;
+  --tone-orange: #de7a2c;
+  --tone-amber: #c99412;
+  --tone-green: #2c9a58;
+  --tone-teal: #1b968d;
+  --tone-blue: #3a72d6;
+  --tone-violet: #7857d4;
+  --tone-pink: #cf4d8c;
+
+  /* Type */
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-figure: 'Iowan Old Style', 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+
+  --t-xs: 11px;
+  --t-sm: 12.5px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 21px;
+  --t-2xl: 30px;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 180ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121816;
+    --sheet: #19211e;
+    --sheet-raised: #212a26;
+    --sunk: #0e1312;
+    --line: #29332f;
+    --line-strong: #3a4641;
+
+    --ink: #e5ebe6;
+    --ink-2: #a8b3ad;
+    --ink-3: #75817b;
+    --ink-inverse: #121816;
+
+    --jersey: #f4c840;
+    --jersey-soft: #3a3317;
+    --jersey-ink: #2a2100;
+
+    --action: #e5ebe6;
+    --action-hover: #ffffff;
+    --on-action: #121816;
+    --toggle-on: #4a5a53;
+    --focus: #6fd3b5;
+    --ok: #5cc995;
+    --danger: #ff8a80;
+    --danger-soft: #3a1f1d;
+    --warn-soft: #332c15;
+
+    --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 30px -6px rgb(0 0 0 / 0.6);
+    --shadow-pop: 0 1px 1px rgb(0 0 0 / 0.4), 0 20px 44px -10px rgb(0 0 0 / 0.7);
+
+    --tone-slate: #94a3b8;
+    --tone-red: #f07575;
+    --tone-orange: #f29a55;
+    --tone-amber: #e5b93b;
+    --tone-green: #5cc98a;
+    --tone-teal: #4cc4b9;
+    --tone-blue: #75a1f0;
+    --tone-violet: #a68cf0;
+    --tone-pink: #ef80b5;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--t-md);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Label tone helpers: set --tone on an element, children use it */
+.tone-slate { --tone: var(--tone-slate); }
+.tone-red { --tone: var(--tone-red); }
+.tone-orange { --tone: var(--tone-orange); }
+.tone-amber { --tone: var(--tone-amber); }
+.tone-green { --tone: var(--tone-green); }
+.tone-teal { --tone: var(--tone-teal); }
+.tone-blue { --tone: var(--tone-blue); }
+.tone-violet { --tone: var(--tone-violet); }
+.tone-pink { --tone: var(--tone-pink); }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: var(--sheet-raised);
+  color: var(--ink);
+  font-size: var(--t-md);
+  font-weight: 560;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    transform 120ms var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink-3);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.btn-primary {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--on-action);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--sunk);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.btn-danger {
+  color: var(--danger);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-2);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+/* Serif figures: the ordinals that give Lineup its voice */
+.figure {
+  font-family: var(--font-figure);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

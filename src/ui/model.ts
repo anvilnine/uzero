@@ -1,0 +1,169 @@
+// UI-only helpers shared by popup, options and the reorder wizard.
+import type { Account, AccountMeta, AppState, LabelColor, Prefs } from '../lib/types';
+
+export const LABEL_COLORS: LabelColor[] = [
+  'slate',
+  'red',
+  'orange',
+  'amber',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink',
+];
+
+export const COLOR_NAMES: Record<LabelColor, string> = {
+  slate: 'Slate',
+  red: 'Red',
+  orange: 'Orange',
+  amber: 'Amber',
+  green: 'Green',
+  teal: 'Teal',
+  blue: 'Blue',
+  violet: 'Violet',
+  pink: 'Pink',
+};
+
+export const LABEL_MAX = 24;
+
+/** One row of the user's lineup: their slot, plus what Google knows (if anything). */
+export interface Row {
+  email: string;
+  /** 1-based position in the user's order. */
+  slot: number;
+  account: Account | null;
+  meta: AccountMeta;
+  name: string;
+  /** Signed out, or no longer reported by Google at all. */
+  inactive: boolean;
+}
+
+/** Merge Google's accounts into the user's order. Unknown emails go last. */
+export function lineup(state: Pick<AppState, 'accounts' | 'prefs'>): Row[] {
+  const byEmail = new Map(state.accounts.map((a) => [a.email, a]));
+  const emails = [...state.prefs.order];
+  for (const a of state.accounts) if (!emails.includes(a.email)) emails.push(a.email);
+  return emails.map((email, i) => {
+    const account = byEmail.get(email) ?? null;
+    return {
+      email,
+      slot: i + 1,
+      account,
+      meta: state.prefs.meta[email] ?? {},
+      name: account?.name || email.split('@')[0] || email,
+      inactive: !account || account.signedOut,
+    };
+  });
+}
+
+export function initials(name: string, email: string): string {
+  const src = name.trim() || email;
+  const parts = src.split(/[\s._-]+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? '?';
+  const second = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return (first + second).toUpperCase();
+}
+
+/** Stable fallback tone for accounts the user has not colored. */
+export function autoTone(email: string): LabelColor {
+  let h = 0;
+  for (let i = 0; i < email.length; i++) h = (h * 31 + email.charCodeAt(i)) >>> 0;
+  return LABEL_COLORS[h % LABEL_COLORS.length] ?? 'slate';
+}
+
+export function toneOf(row: { email: string; meta: AccountMeta }): LabelColor {
+  return row.meta.color ?? autoTone(row.email);
+}
+
+export function cleanLabel(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, LABEL_MAX);
+}
+
+export function move<T>(list: T[], from: number, to: number): T[] {
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  if (item === undefined) return list;
+  next.splice(Math.max(0, Math.min(next.length, to)), 0, item);
+  return next;
+}
+
+export function sameOrder(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+// ---- Popup paint cache -------------------------------------------------------
+// The popup paints the last known state synchronously, then refreshes. The cache holds account
+// emails, names and photos, so it is dropped as soon as no accounts are left, and anything that
+// doesn't look exactly like a state we wrote is ignored.
+
+const CACHE_KEY = 'lineup:last-state';
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+function isAccount(v: unknown): v is Account {
+  return (
+    isObj(v) &&
+    typeof v.email === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.photo === 'string' &&
+    Number.isInteger(v.index) &&
+    typeof v.signedOut === 'boolean'
+  );
+}
+
+function isMeta(v: unknown): v is AccountMeta {
+  return (
+    isObj(v) &&
+    (v.label === undefined || typeof v.label === 'string') &&
+    (v.color === undefined || LABEL_COLORS.includes(v.color as LabelColor))
+  );
+}
+
+function isPrefs(v: unknown): v is Prefs {
+  return (
+    isObj(v) &&
+    isStrings(v.order) &&
+    isObj(v.meta) &&
+    Object.values(v.meta).every(isMeta) &&
+    typeof v.pinEnabled === 'boolean' &&
+    isObj(v.serviceDefaults) &&
+    Object.values(v.serviceDefaults).every((x) => typeof x === 'string') &&
+    isStrings(v.disabledServices)
+  );
+}
+
+export function readCache(): AppState | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const s: unknown = JSON.parse(raw);
+    if (!isObj(s) || !Array.isArray(s.accounts) || s.accounts.length === 0 || !s.accounts.every(isAccount)) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    if (!isPrefs(s.prefs)) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    // Status and wizard are never trusted from the cache; the background sends the real ones.
+    return { accounts: s.accounts, prefs: s.prefs, status: { kind: 'idle' }, wizard: null };
+  } catch {
+    return null;
+  }
+}
+
+export function writeCache(s: AppState): void {
+  try {
+    if (s.accounts.length === 0) localStorage.removeItem(CACHE_KEY);
+    else localStorage.setItem(CACHE_KEY, JSON.stringify({ accounts: s.accounts, prefs: s.prefs }));
+  } catch {
+    /* storage full or blocked: painting from cache is optional */
+  }
+}
+
+export function patchPrefs(state: AppState, patch: Partial<Prefs>): AppState {
+  return { ...state, prefs: { ...state.prefs, ...patch } };
+}
