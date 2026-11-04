@@ -55,7 +55,7 @@ Lineup **never** types, fills, reads or stores passwords. It does not add script
 
 | Permission | Why |
 |---|---|
-| Access to listed Google sites | Read your account list. Open Google links in the account you pick. Nothing else. |
+| Access to the Google sites listed in the appendix | Read your account list. Open Google links in the account you pick. Nothing else. |
 | `declarativeNetRequestWithHostAccess` | Add the account number to Google links (Pin mode). This happens inside your browser. |
 | `storage` | Save your order, labels and settings on this device. |
 | `alarms` | Refresh the account list every 15 minutes while Pin mode is on. |
@@ -99,3 +99,52 @@ If this policy changes, we update the effective date above and publish the new t
 ## 13. Contact
 
 Questions or requests: open an issue at [github.com/anvilnine/lineup/issues](https://github.com/anvilnine/lineup/issues). The source code is public there, so anyone can check what Lineup does.
+
+## Appendix: Google sites Lineup can access
+
+Lineup asks for access to these 44 sites only, over HTTPS. It uses them to read your account list (`accounts.google.com`) and to open Google links in the account you pick. `www.google.com` is there only for Google Maps links.
+
+- `accounts.google.com`
+- `admanager.google.com`
+- `admin.google.com`
+- `ads.google.com`
+- `adsense.google.com`
+- `aistudio.google.com`
+- `analytics.google.com`
+- `business.google.com`
+- `calendar.google.com`
+- `chat.google.com`
+- `classroom.google.com`
+- `colab.research.google.com`
+- `console.cloud.google.com`
+- `console.firebase.google.com`
+- `contacts.google.com`
+- `docs.google.com`
+- `drive.google.com`
+- `gemini.google.com`
+- `groups.google.com`
+- `issuetracker.google.com`
+- `keep.google.com`
+- `lookerstudio.google.com`
+- `m.youtube.com`
+- `mail.google.com`
+- `meet.google.com`
+- `merchants.google.com`
+- `music.youtube.com`
+- `myaccount.google.com`
+- `news.google.com`
+- `notebooklm.google.com`
+- `one.google.com`
+- `photos.google.com`
+- `play.google.com`
+- `script.google.com`
+- `search.google.com`
+- `shell.cloud.google.com`
+- `sites.google.com`
+- `studio.youtube.com`
+- `tagmanager.google.com`
+- `tasks.google.com`
+- `voice.google.com`
+- `workspace.google.com`
+- `www.google.com`
+- `www.youtube.com`
