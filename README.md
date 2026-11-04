@@ -14,7 +14,7 @@
   <img alt="Firefox 140+" src="https://img.shields.io/badge/Firefox-140%2B-FF7139?style=flat-square&logo=firefoxbrowser&logoColor=white">
   <img alt="Edge" src="https://img.shields.io/badge/Edge-supported-0C8484?style=flat-square">
   <img alt="No tracking" src="https://img.shields.io/badge/tracking-none-1F1F1F?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-316%20passing-2E7D32?style=flat-square">
+  <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3C4043?style=flat-square">
 </p>
 
 <p align="center">
@@ -51,7 +51,7 @@ Google numbers your accounts by the order you signed in. Your work account is `/
 - **Reorder for real.** A guide in the side panel signs you out, then helps you sign back in, one account at a time. Google's own numbers then match your order.
 - **Password-manager friendly.** Each step shows the email to use, with a Copy button, in case your password manager fills in a different one.
 - **Light and dark.** A calm, Google-style look that follows your system theme.
-- **Light on your browser.** Lineup adds nothing to the pages you visit, and only checks in the background while Pin is on.
+- **Light on your browser.** Lineup adds nothing to the pages you visit. It reads your account list when you open it or sign in, and every 15 minutes only while Pin is on.
 
 ## How it works
 
@@ -136,7 +136,7 @@ Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, a
 | <kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>4</kbd> | Switch this tab to account 1–4 in your order |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | Move the focused account up or down |
 
-Change the shortcuts at `chrome://extensions/shortcuts`.
+Change the shortcuts at `chrome://extensions/shortcuts`. On Linux, <kbd>Alt</kbd>+number already switches browser tabs, so pick other keys there.
 
 ## Privacy
 
@@ -151,6 +151,12 @@ Change the shortcuts at `chrome://extensions/shortcuts`.
 Read the full [Privacy Policy](docs/PRIVACY.md) and [Terms of Use](docs/TERMS.md).
 
 ## FAQ
+
+<details>
+<summary><b>Why does Chrome say Lineup can "read and change your data" on Google sites?</b></summary>
+<br>
+Chrome shows that warning for any extension that can open Google links in a chosen account. Lineup only uses it to read your account list and add the account number to Google links. It never reads page content. The full list of sites is in the <a href="docs/PRIVACY.md">Privacy Policy</a>.
+</details>
 
 <details>
 <summary><b>Will Lineup sign me out?</b></summary>
@@ -205,11 +211,15 @@ src/
 
 ## Contributing
 
-Bug reports and ideas are welcome. For big changes, please open an issue first. Run `pnpm test && pnpm typecheck && pnpm check` before you send a pull request.
+Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/lineup/issues). For big changes, please open an issue first. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[GPL-3.0](LICENSE). You may use, change and share the code, as long as shared versions stay open under the same license.
 
 ## Credits
 
-Ideas and techniques from these MIT and BSD projects: [authusher](https://github.com/zzjjaayy/authusher-default-google-account-extension), [authpin](https://github.com/emretepedev/authpin-for-google), [account-switcher-for-google](https://github.com/piro0919/account-switcher-for-google) and [default.wtf](https://github.com/uptechteam/default.wtf).
+Based in part on [authusher](https://github.com/zzjjaayy/authusher-default-google-account-extension) (MIT), with ideas from [authpin](https://github.com/emretepedev/authpin-for-google), [account-switcher-for-google](https://github.com/piro0919/account-switcher-for-google) and [default.wtf](https://github.com/uptechteam/default.wtf). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

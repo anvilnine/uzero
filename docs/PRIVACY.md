@@ -4,7 +4,7 @@
 
 > **Short version.** Lineup runs only in your browser. We have no servers, so we never receive your data. Lineup talks only to Google, and only to do what you ask. It never sees your passwords.
 
-This policy covers the Lineup browser extension ("Lineup") for Chrome, Edge and Firefox. "We" and "us" mean the developer of Lineup. "You" means the person who uses it.
+This policy covers the Lineup browser extension ("Lineup") for Chrome, Edge and Firefox. "We" and "us" mean anvilnine, the developer of Lineup. "You" means the person who uses it.
 
 ## 1. The data Lineup uses
 
@@ -26,7 +26,7 @@ Lineup does **not** use or collect:
 
 All data stays **on your device**, in the browser's own extension storage:
 
-- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list, so the popup opens fast.
+- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list. The popup keeps one more copy of that list in its own page storage, so it opens fast.
 - **Deleted when the browser closes:** the progress of a reorder, and short-term status.
 
 We have no servers, no database and no account system. **We never receive a copy of your data, so we cannot see, sell or share it.**
@@ -62,7 +62,9 @@ Lineup **never** types, fills, reads or stores passwords. It does not add script
 | `sidePanel` (Chrome) | Show the reorder steps next to Google's sign-in page. |
 | `webRequest`, `webRequestBlocking` (Firefox only) | Let Lineup's own account-list request reach Google. |
 
-Lineup does not ask for access to all websites, your tabs list, cookies, or downloads.
+Lineup does not ask for access to all websites, your tabs list, cookies, or downloads. It does not run in private or incognito windows.
+
+The exact Google sites Lineup can access are listed in the appendix below.
 
 ## 7. How long data is kept, and how to delete it
 
@@ -96,4 +98,4 @@ If this policy changes, we update the effective date above and publish the new t
 
 ## 13. Contact
 
-Questions or requests: open an issue on Lineup's GitHub page.
+Questions or requests: open an issue at [github.com/anvilnine/lineup/issues](https://github.com/anvilnine/lineup/issues). The source code is public there, so anyone can check what Lineup does.

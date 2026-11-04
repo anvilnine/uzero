@@ -4,7 +4,7 @@
 
 > **Short version.** Lineup is free and comes "as is". You keep control of your Google accounts and passwords. A reorder signs you out of every Google account, so have your passwords and 2-Step Verification ready. If something goes wrong, our liability is limited as far as the law allows.
 
-These Terms are an agreement between you and the developer of Lineup ("we", "us"). They cover the Lineup browser extension, its updates and its documentation ("Lineup"). **When you install or use Lineup, you agree to these Terms.** If you do not agree, do not install or use Lineup.
+These Terms are an agreement between you and anvilnine, the developer of Lineup ("we", "us"). They cover the Lineup browser extension, its updates and its documentation ("Lineup"). **When you install or use Lineup, you agree to these Terms.** If you do not agree, do not install or use Lineup.
 
 ## 1. What Lineup does
 
@@ -16,7 +16,7 @@ You must be at least 13 years old, or the minimum age for a Google account in yo
 
 ## 3. Your license
 
-We give you a personal, free, non-exclusive, non-transferable and revocable license to install and use Lineup. If Lineup's source code is published under an open-source license, that license controls the source code. These Terms control your use of the extension.
+Lineup's source code is licensed under the [GNU General Public License v3.0](../LICENSE) (GPL-3.0). The GPL-3.0 controls what you may do with the source code: copy it, change it and share it under the same license. These Terms control your use of the published extension from the browser stores. Nothing in these Terms limits your rights under the GPL-3.0.
 
 ## 4. Your accounts and passwords
 
@@ -35,7 +35,7 @@ Do not:
 - use Lineup to get access to an account that you are not allowed to use;
 - use Lineup in a way that breaks the law or Google's terms;
 - change Lineup to collect other people's data, or publish a changed copy that pretends to be Lineup;
-- remove or hide these Terms or the Privacy Policy from a copy that you share, where the license lets you share it.
+- present a changed copy as the official Lineup, or use the Lineup name and icon for it.
 
 ## 7. Updates and changes
 
@@ -67,7 +67,7 @@ Nothing in these Terms takes away rights that you have as a consumer under the l
 
 ## 13. Law and disputes
 
-The law of the country where the developer lives controls these Terms, without regard to its conflict-of-laws rules. This does not remove the protection of mandatory consumer laws where you live. Before any formal claim, contact us so we can try to solve the problem. Each party agrees to try to settle a dispute in good faith for 30 days first.
+The law of the country where anvilnine has its principal place of business controls these Terms, without regard to its conflict-of-laws rules. This does not remove the protection of mandatory consumer laws where you live. Before any formal claim, contact us so we can try to solve the problem. Each party agrees to try to settle a dispute in good faith for 30 days first.
 
 ## 14. General
 
@@ -78,4 +78,4 @@ The law of the country where the developer lives controls these Terms, without r
 
 ## 15. Contact
 
-Questions: open an issue on Lineup's GitHub page.
+Questions: open an issue at [github.com/anvilnine/lineup/issues](https://github.com/anvilnine/lineup/issues).
