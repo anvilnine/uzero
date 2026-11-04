@@ -10,36 +10,36 @@ type Listener = (s: AppState) => void;
 
 const ACCOUNTS: Account[] = [
   {
-    email: 'ana.reyes@example.com',
-    name: 'Ana Reyes',
+    email: 'me@zonilyjame.dev',
+    name: 'Zonily Jame',
     photo: '',
     index: 0,
     signedOut: false,
   },
   {
-    email: 'ana@northwind.example.org',
-    name: 'Ana Reyes',
+    email: 'zonily@anvilnine.com',
+    name: 'Zonily Jame',
     photo: '',
     index: 1,
     signedOut: false,
   },
   {
-    email: 'orders@lunabakeshop.example.net',
-    name: 'Luna Bakeshop',
+    email: 'hello@critalarm.app',
+    name: 'Crit Alarm',
     photo: '',
     index: 2,
     signedOut: false,
   },
   {
-    email: 'amreyes2@university.example.org',
-    name: 'Ana Marie Reyes',
+    email: 'team@namescout.app',
+    name: 'Namescout',
     photo: '',
     index: 3,
     signedOut: false,
   },
   {
-    email: 'ana.reyes.old@example.com',
-    name: 'Ana Reyes',
+    email: 'old@zonilyjame.dev',
+    name: 'Zonily Jame',
     photo: '',
     index: -1,
     signedOut: true,
@@ -48,20 +48,20 @@ const ACCOUNTS: Account[] = [
 
 const PREFS: Prefs = {
   order: [
-    'ana@northwind.example.org',
-    'ana.reyes@example.com',
-    'orders@lunabakeshop.example.net',
-    'amreyes2@university.example.org',
-    'ana.reyes.old@example.com',
+    'zonily@anvilnine.com',
+    'me@zonilyjame.dev',
+    'hello@critalarm.app',
+    'team@namescout.app',
+    'old@zonilyjame.dev',
   ],
   meta: {
-    'ana@northwind.example.org': { label: 'Work', color: 'blue' },
-    'ana.reyes@example.com': { label: 'Personal', color: 'green' },
-    'orders@lunabakeshop.example.net': { label: 'Bakeshop', color: 'amber' },
-    'amreyes2@university.example.org': { label: 'School', color: 'violet' },
+    'zonily@anvilnine.com': { label: 'Work', color: 'blue' },
+    'me@zonilyjame.dev': { label: 'Personal', color: 'green' },
+    'hello@critalarm.app': { label: 'Support', color: 'orange' },
+    'team@namescout.app': { label: 'Team', color: 'violet' },
   },
   pinEnabled: true,
-  serviceDefaults: { youtube: 'ana.reyes@example.com', photos: 'ana.reyes@example.com' },
+  serviceDefaults: { youtube: 'me@zonilyjame.dev', photos: 'me@zonilyjame.dev' },
   disabledServices: ['maps'],
 };
 
@@ -165,7 +165,7 @@ function presetWizard(): WizardState | null {
         current: 1,
         completed: [queue[0]!],
         tabId: 7,
-        error: 'You signed in as amreyes2@university.example.org.',
+        error: 'You signed in as team@namescout.app.',
       };
     case 'tab-closed':
       return { ...base, phase: 'error', errorKind: 'tab-closed', current: 1, completed: [queue[0]!], error: 'The Google tab was closed.' };
@@ -222,7 +222,7 @@ async function handle(req: Request): Promise<unknown> {
     case 'activeTabService':
       return tabNone
         ? { serviceId: null, email: null }
-        : { serviceId: 'gmail', email: 'ana.reyes@example.com' };
+        : { serviceId: 'gmail', email: 'me@zonilyjame.dev' };
     case 'wizardOpen': {
       const cur = state.wizard;
       if (cur && (cur.phase === 'signing-out' || cur.phase === 'signing-in' || cur.phase === 'error')) return clone(cur);

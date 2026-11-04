@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f7f3ee; --ink: #1f1f1f; --muted: #5f6368; --line: #e6dfd6;
+    --orange: #d9541e; --orange-soft: #fbe3d6; --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 800px; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide { display: none; position: relative; width: 1280px; height: 800px; }
+  .slide.on { display: flex; align-items: center; }
+  .copy { width: 520px; padding-left: 96px; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; color: var(--muted); font-size: 18px; font-weight: 500; }
+  .brand img { width: 36px; height: 36px; }
+  h1 { font-size: 54px; line-height: 1.08; font-weight: 650; letter-spacing: -1.2px; }
+  h1 em { font-style: normal; color: var(--orange); }
+  p.sub { margin-top: 22px; font-size: 21px; line-height: 1.45; color: var(--muted); max-width: 400px; }
+  .stage { flex: 1; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
+  .shot { border-radius: 18px; overflow: hidden; background: var(--card);
+    box-shadow: 0 1px 2px rgba(60,40,20,.08), 0 18px 48px rgba(60,40,20,.14); }
+  .shot img { display: block; width: 100%; }
+
+  /* 1: popup */
+  .s1 .light { width: 360px; position: relative; z-index: 2; }
+  .s1 .dark { width: 320px; position: absolute; right: 70px; top: 150px; opacity: .95; transform: rotate(3deg); }
+  .s1 .light { margin-right: 150px; }
+
+  /* 2: links */
+  .bars { width: 600px; display: flex; flex-direction: column; gap: 18px; align-items: stretch; }
+  .from { font-size: 15px; color: var(--muted); font-weight: 500; letter-spacing: .2px; padding-left: 6px; }
+  .bar { display: flex; align-items: center; gap: 14px; height: 64px; padding: 0 24px; border-radius: 32px; background: var(--card);
+    font: 500 23px/1 ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink);
+    box-shadow: 0 1px 2px rgba(60,40,20,.08), 0 10px 28px rgba(60,40,20,.10); }
+  .bar.before { color: var(--muted); }
+  .bar .lock { width: 18px; height: 18px; border-radius: 50%; background: var(--line); flex: none; }
+  .bar b { color: var(--orange); font-weight: 600; }
+  .arrow { align-self: center; width: 2px; height: 34px; background: var(--line); position: relative; }
+  .arrow::after { content: ""; position: absolute; left: -7px; bottom: -2px; border: 8px solid transparent; border-top-color: #cfc6ba; border-bottom: 0; }
+  .who { display: flex; align-items: center; gap: 12px; align-self: flex-end; margin-top: 6px; padding: 10px 18px 10px 10px; border-radius: 28px; background: var(--card);
+    box-shadow: 0 1px 2px rgba(60,40,20,.08), 0 10px 28px rgba(60,40,20,.10); font-size: 17px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; background: #dbe7fb; color: #1b4fb8; }
+  .who small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .chip { margin-left: 6px; padding: 3px 10px; border-radius: 12px; background: var(--orange-soft); color: var(--orange); font-size: 14px; font-weight: 600; }
+
+  /* 3: per app */
+  .s3 .shot { width: 560px; height: 560px; }
+  .s3 .shot img { width: 560px; }
+
+  /* 4: reorder */
+  .browser { width: 700px; height: 600px; border-radius: 16px; background: var(--card); display: flex; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(60,40,20,.08), 0 18px 48px rgba(60,40,20,.14); }
+  .page { flex: 1; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+  .chrome { height: 44px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+  .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .chrome span { margin-left: 12px; flex: 1; height: 24px; border-radius: 12px; background: #f3efe9; font: 12px/24px ui-monospace, Menlo, monospace; color: var(--muted); padding-left: 12px; }
+  .signin { margin: 70px auto 0; width: 260px; display: flex; flex-direction: column; gap: 14px; }
+  .signin .t { height: 16px; width: 120px; border-radius: 8px; background: #ece6de; }
+  .signin .t2 { height: 12px; width: 190px; border-radius: 6px; background: #f1ece5; }
+  .field { margin-top: 18px; height: 46px; border: 1.5px solid #cfc6ba; border-radius: 8px; padding: 0 14px; font-size: 15px; line-height: 43px; color: var(--ink); }
+  .field.pw { color: #b8b0a6; letter-spacing: 3px; margin-top: 0; }
+  .btn { align-self: flex-end; margin-top: 12px; width: 92px; height: 38px; border-radius: 19px; background: #ece6de; }
+  .panel { width: 300px; overflow: hidden; }
+  .panel img { width: 300px; display: block; }
+
+  /* 5: privacy */
+  .s5 .copy { width: 640px; }
+  .bigicon { width: 300px; height: 300px; border-radius: 66px; box-shadow: 0 24px 60px rgba(120,50,10,.25); }
+  .points { margin-top: 34px; display: flex; flex-direction: column; gap: 16px; }
+  .point { display: flex; align-items: center; gap: 14px; font-size: 21px; }
+  .tick { width: 30px; height: 30px; border-radius: 50%; background: var(--orange-soft); display: grid; place-items: center; flex: none; }
+  .tick::after { content: ""; width: 10px; height: 5px; border-left: 2.5px solid var(--orange); border-bottom: 2.5px solid var(--orange); transform: translateY(-2px) rotate(-45deg); }
+  .foot { position: absolute; left: 96px; bottom: 36px; font-size: 13px; color: #9a9187; }
+
+  /* promo 440x280 */
+  .promo { display: none; width: 440px; height: 280px; align-items: center; gap: 22px; padding: 0 34px; background: var(--bg); }
+  .promo.on { display: flex; }
+  .promo img { width: 120px; height: 120px; border-radius: 27px; box-shadow: 0 12px 28px rgba(120,50,10,.22); }
+  .promo h2 { font-size: 34px; font-weight: 650; letter-spacing: -.6px; }
+  .promo p { margin-top: 8px; font-size: 16px; line-height: 1.35; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<section class="slide s1" data-n="1">
+  <div class="copy">
+    <div class="brand"><img src="assets/icon.png" alt="">Lineup</div>
+    <h1>Your Google accounts, <em>in your order.</em></h1>
+    <p class="sub">Drag them into place. Give each one a label and a color.</p>
+  </div>
+  <div class="stage">
+    <div class="shot dark"><img src="assets/popup-dark.png" alt=""></div>
+    <div class="shot light"><img src="assets/popup.png" alt=""></div>
+  </div>
+</section>
+
+<section class="slide s2" data-n="2">
+  <div class="copy">
+    <div class="brand"><img src="assets/icon.png" alt="">Lineup</div>
+    <h1>Links open in <em>the right account.</em></h1>
+    <p class="sub">Pin your #1. Links from chat, email and bookmarks stop landing in the wrong inbox.</p>
+  </div>
+  <div class="stage">
+    <div class="bars">
+      <div class="from">A link from Slack</div>
+      <div class="bar before"><span class="lock"></span>mail.google.com/mail/</div>
+      <div class="arrow"></div>
+      <div class="bar"><span class="lock"></span><span>mail.google.com/mail<b>/u/1/</b></span></div>
+      <div class="who">
+        <div class="avatar">Z</div>
+        <div>zonily@anvilnine.com<small>Your #1 account</small></div>
+        <span class="chip">Work</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s3" data-n="3">
+  <div class="copy">
+    <div class="brand"><img src="assets/icon.png" alt="">Lineup</div>
+    <h1>One account <em>per app.</em></h1>
+    <p class="sub">Calendar in Work, YouTube in Personal. Lineup remembers each choice by email.</p>
+  </div>
+  <div class="stage">
+    <div class="shot"><img src="assets/pin.png" alt=""></div>
+  </div>
+</section>
+
+<section class="slide s4" data-n="4">
+  <div class="copy">
+    <div class="brand"><img src="assets/icon.png" alt="">Lineup</div>
+    <h1>Make Google's order <em>match yours.</em></h1>
+    <p class="sub">A side panel guides you: sign out once, then back in, one account at a time. You type every password.</p>
+  </div>
+  <div class="stage">
+    <div class="browser">
+      <div class="page">
+        <div class="chrome"><i></i><i></i><i></i><span>accounts.google.com</span></div>
+        <div class="signin">
+          <div class="t"></div><div class="t2"></div>
+          <div class="field">me@zonilyjame.dev</div>
+          <div class="field pw">••••••••••</div>
+          <div class="btn"></div>
+        </div>
+      </div>
+      <div class="panel"><img src="assets/panel.png" alt=""></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s5" data-n="5">
+  <div class="copy">
+    <div class="brand"><img src="assets/icon.png" alt="">Lineup</div>
+    <h1>Private <em>by design.</em></h1>
+    <div class="points">
+      <div class="point"><span class="tick"></span>No servers, no analytics, no tracking</div>
+      <div class="point"><span class="tick"></span>Never reads or stores your passwords</div>
+      <div class="point"><span class="tick"></span>Open source under GPL-3.0</div>
+      <div class="point"><span class="tick"></span>Chrome, Edge and Firefox</div>
+    </div>
+  </div>
+  <div class="stage"><img class="bigicon" src="assets/icon.png" alt=""></div>
+  <div class="foot">Not affiliated with or endorsed by Google.</div>
+</section>
+
+<section class="promo" data-n="promo">
+  <img src="assets/icon.png" alt="">
+  <div>
+    <h2>Lineup</h2>
+    <p>Your Google accounts,<br>in your order.</p>
+  </div>
+</section>
+
+<script>
+  const n = new URLSearchParams(location.search).get('n') || '1';
+  document.querySelector(`[data-n="${n}"]`).classList.add('on');
+  if (n === 'promo') { document.documentElement.style.width = document.body.style.width = '440px'; document.documentElement.style.height = document.body.style.height = '280px'; }
+</script>
+</body>
+</html>
