@@ -108,6 +108,13 @@ describe('permissionHosts', () => {
     expect(hosts).toContain('accounts.google.com');
     expect(hosts).toContain('myaccount.google.com');
   });
+  it('leaves out sensitive account pages Lineup has no use for', () => {
+    for (const h of ['passwords.google.com', 'pay.google.com', 'takeout.google.com', 'myactivity.google.com']) {
+      expect(hosts).not.toContain(h);
+    }
+    // Maps lives on www.google.com, so that host stays.
+    expect(hosts).toContain('www.google.com');
+  });
   it('lists exact hostnames only, no wildcards or bare apex domains', () => {
     expect(new Set(hosts).size).toBe(hosts.length);
     for (const h of hosts) {

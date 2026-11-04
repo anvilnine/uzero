@@ -45,7 +45,10 @@ export function sanitizeEmails(input: unknown, max = MAX_ACCOUNTS): string[] {
   return [...out];
 }
 
-const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+/** Highest /u/N Lineup accepts from Google. Anything above is treated as a missing index. */
+export const MAX_INDEX = MAX_ACCOUNTS - 1;
+
+const isIndex = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_INDEX;
 
 /** Parse a ListAccounts body. Never throws: garbage gives an empty list. */
 export function parseListAccounts(body: unknown): Account[] {
@@ -71,7 +74,7 @@ export function parseListAccounts(body: unknown): Account[] {
     const email = normalizeEmail(row[3]);
     if (!email || seen.has(email)) continue;
     seen.add(email);
-    const index = signedOut ? -1 : isInt(row[7]) ? row[7] : slot;
+    const index = signedOut ? -1 : isIndex(row[7]) ? row[7] : slot;
     out.push({
       email,
       name: typeof row[2] === 'string' ? row[2].slice(0, 200) : '',

@@ -1,8 +1,8 @@
 // Integration test of the background router against WXT's fake browser.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { accountsItem, loopPausesItem, prefsItem, wizardItem } from './store';
-import { WIZARD_TTL_MS } from './wizard';
+import { accountsItem, loopPausesItem, prefsItem, statusItem, wizardItem } from './store';
+import { LOGOUT_URL, WIZARD_TTL_MS } from './wizard';
 
 const dnr = {
   getDynamicRules: vi.fn(async () => [{ id: 7 }]),
@@ -16,6 +16,8 @@ let rows: unknown[] = [];
 const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(['gaia.l.a.r', rows])));
 
 const OWN = { id: 'test-extension-id', url: 'chrome-extension://test-extension-id/popup.html' };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Loose view of Envelope so tests can read .data without narrowing. */
 type Reply = { ok: boolean; data?: any; error?: string };
@@ -114,7 +116,7 @@ describe('background router', () => {
     const begun = await send({ type: 'wizardBegin' });
     expect(begun.data.phase).toBe('signing-out');
     const tabId = begun.data.tabId as number;
-    expect((await fakeBrowser.tabs.get(tabId)).url).toBe('https://accounts.google.com/Logout');
+    expect((await fakeBrowser.tabs.get(tabId)).url).toBe(LOGOUT_URL);
 
     rows = [];
     await send({ type: 'refresh' });
@@ -269,14 +271,19 @@ describe('background router', () => {
   it('pauses pin on a host that keeps bouncing a tab', async () => {
     await send({ type: 'refresh' });
     await send({ type: 'savePrefs', patch: { order: ['b@x.com', 'a@x.com'], pinEnabled: true } });
-    const tab = await fakeBrowser.tabs.create({ url: 'https://mail.google.com/mail/u/1/' });
-    const hit = () => fakeBrowser.tabs.onUpdated.trigger(tab.id!, { status: 'loading' }, tab);
+    const tab = await fakeBrowser.tabs.create({ url: 'https://mail.google.com/mail/' });
+    const go = (url: string) => fakeBrowser.tabs.onUpdated.trigger(tab.id!, { status: 'loading', url }, { ...tab, url });
+    // Google drops the account, pin adds it back: a bare URL, then /u/1/, over and over.
+    const bounce = async () => {
+      await go('https://mail.google.com/mail/');
+      await go('https://mail.google.com/mail/u/1/');
+    };
     dnr.updateSessionRules.mockClear();
-    await hit();
-    await hit();
-    await new Promise((r) => setTimeout(r, 10));
+    await bounce();
+    await bounce();
+    await sleep(10);
     expect(dnr.updateSessionRules).not.toHaveBeenCalled();
-    await hit();
+    await bounce();
     await vi.waitFor(() => expect(dnr.updateSessionRules).toHaveBeenCalled());
     const arg = dnr.updateSessionRules.mock.calls.at(-1)![0] as { addRules: { condition: { requestDomains: string[] } }[] };
     expect(arg.addRules.map((r) => r.condition.requestDomains)).toEqual([['mail.google.com']]);
@@ -286,8 +293,127 @@ describe('background router', () => {
     // A tab without our marker, or a host we don't pin, never counts.
     dnr.updateSessionRules.mockClear();
     const bare = await fakeBrowser.tabs.create({ url: 'https://meet.google.com/abc' });
-    for (let i = 0; i < 4; i++) await fakeBrowser.tabs.onUpdated.trigger(bare.id!, { status: 'loading' }, bare);
-    await new Promise((r) => setTimeout(r, 10));
+    for (let i = 0; i < 4; i++) {
+      const url = i % 2 ? 'https://meet.google.com/abc' : 'https://meet.google.com/abc?authuser=1';
+      await fakeBrowser.tabs.onUpdated.trigger(bare.id!, { status: 'loading', url }, { ...bare, url });
+    }
+    await sleep(10);
     expect(dnr.updateSessionRules).not.toHaveBeenCalled();
+  });
+
+  it('reloads and in-app navigation on the pinned account never pause pin', async () => {
+    await send({ type: 'refresh' });
+    await send({ type: 'savePrefs', patch: { order: ['b@x.com', 'a@x.com'], pinEnabled: true } });
+    const tab = await fakeBrowser.tabs.create({ url: 'https://mail.google.com/mail/u/1/' });
+    const go = (url: string) => fakeBrowser.tabs.onUpdated.trigger(tab.id!, { status: 'loading', url }, { ...tab, url });
+    dnr.updateSessionRules.mockClear();
+    await go('https://mail.google.com/mail/u/1/');
+    // Reloads: same URL, no change.
+    for (let i = 0; i < 5; i++) {
+      await fakeBrowser.tabs.onUpdated.trigger(tab.id!, { status: 'loading' }, { ...tab, url: 'https://mail.google.com/mail/u/1/' });
+    }
+    // Moving around inside /mail/u/1/.
+    for (const h of ['#inbox', '#sent', '#starred', '#inbox/abc', '#inbox']) await go(`https://mail.google.com/mail/u/1/${h}`);
+    // Arriving from another host, or from a bare URL just once, doesn't add up either.
+    await go('https://drive.google.com/drive/');
+    await go('https://mail.google.com/mail/u/1/');
+    await go('https://mail.google.com/mail/');
+    await go('https://mail.google.com/mail/u/1/');
+    await sleep(10);
+    expect(dnr.updateSessionRules).not.toHaveBeenCalled();
+    expect(await loopPausesItem.getValue()).toEqual({});
+  });
+
+  it('removes every dynamic rule when installing new ones fails', async () => {
+    await send({ type: 'refresh' });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    dnr.updateDynamicRules.mockClear();
+    dnr.updateDynamicRules.mockRejectedValueOnce(new Error('quota'));
+    await send({ type: 'savePrefs', patch: { order: ['b@x.com', 'a@x.com'], pinEnabled: true } });
+    expect(dnr.updateDynamicRules).toHaveBeenCalledTimes(2);
+    // Fail closed: no stale redirect may send links to the wrong /u/N.
+    expect(dnr.updateDynamicRules.mock.calls[1]![0]).toEqual({ removeRuleIds: [7] });
+  });
+
+  it('does not rewrite an unchanged ok status on every refresh', async () => {
+    const t0 = 1_000_000;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(t0);
+    await send({ type: 'refresh' });
+    expect(await statusItem.getValue()).toEqual({ kind: 'ok', at: t0 });
+    now.mockReturnValue(t0 + 3000);
+    await send({ type: 'refresh' });
+    expect(await statusItem.getValue()).toEqual({ kind: 'ok', at: t0 });
+    // Accounts changed: written right away.
+    rows = [row('a@x.com', 0)];
+    await send({ type: 'refresh' });
+    expect(await statusItem.getValue()).toEqual({ kind: 'ok', at: t0 + 3000 });
+    // Nothing changed, but a minute went by.
+    now.mockReturnValue(t0 + 3000 + 60_000);
+    await send({ type: 'refresh' });
+    expect(await statusItem.getValue()).toEqual({ kind: 'ok', at: t0 + 63_000 });
+  });
+
+  it('closing the Google tab mid-reorder stops at tab-closed, and Retry opens it again', async () => {
+    const { tabId } = await toSigningIn();
+    rows = [row('b@x.com', 0)];
+    await send({ type: 'refresh' });
+    expect(await wizardItem.getValue()).toMatchObject({ phase: 'signing-in', current: 1, tabId });
+
+    // The fake's tabs.remove looks the window up by tab id, so close the tab by event instead.
+    await fakeBrowser.tabs.onRemoved.trigger(tabId, { windowId: 0, isWindowClosing: false });
+    await vi.waitFor(async () =>
+      expect(await wizardItem.getValue()).toMatchObject({ phase: 'error', errorKind: 'tab-closed' }),
+    );
+    expect((await wizardItem.getValue())?.tabId).toBeUndefined();
+
+    const res = await send({ type: 'wizardRetry' });
+    expect(res.data).toMatchObject({ phase: 'signing-in', current: 1, completed: ['b@x.com'] });
+    expect(res.data.tabId).not.toBe(tabId);
+    expect((await fakeBrowser.tabs.get(res.data.tabId)).url).toContain('/AddSession?Email=a%40x.com');
+  });
+
+  it('Continue anyway goes on to sign-in, keeping accounts that stayed signed in', async () => {
+    await send({ type: 'refresh' });
+    await send({ type: 'wizardOpen', queue: ['b@x.com', 'a@x.com'] });
+    const begun = await send({ type: 'wizardBegin' });
+    const tabId = begun.data.tabId as number;
+    rows = [row('a@x.com', 0)]; // Chrome sync keeps its own account
+    await send({ type: 'refresh' });
+    expect(await wizardItem.getValue()).toMatchObject({ phase: 'signing-out' });
+
+    const res = await send({ type: 'wizardContinue' });
+    expect(res.data).toMatchObject({ phase: 'signing-in', current: 0, kept: ['a@x.com'], tabId });
+    expect((await fakeBrowser.tabs.get(tabId)).url).toContain('/AddSession?Email=b%40x.com');
+
+    rows = [row('a@x.com', 0), row('b@x.com', 1)];
+    await send({ type: 'refresh' });
+    expect(await wizardItem.getValue()).toMatchObject({ phase: 'done', completed: ['a@x.com', 'b@x.com'] });
+
+    // Outside sign-out it changes nothing.
+    expect((await send({ type: 'wizardContinue' })).data.phase).toBe('done');
+  });
+
+  it('keeps its tab when Logout lands on Google’s home page, but not on a search', async () => {
+    await send({ type: 'refresh' });
+    await send({ type: 'wizardOpen', queue: ['b@x.com', 'a@x.com'] });
+    const begun = await send({ type: 'wizardBegin' });
+    const tabId = begun.data.tabId as number;
+    await fakeBrowser.tabs.update(tabId, { url: 'https://www.google.com/' });
+    rows = [];
+    await send({ type: 'refresh' });
+    expect(await wizardItem.getValue()).toMatchObject({ phase: 'signing-in', tabId });
+    expect((await fakeBrowser.tabs.get(tabId)).url).toContain('/AccountChooser?Email=b%40x.com');
+
+    // The user searched in that tab while it was on Google's home page: it is theirs now.
+    await send({ type: 'wizardCancel' });
+    rows = [row('a@x.com', 0)];
+    await send({ type: 'wizardOpen', queue: ['b@x.com', 'a@x.com'] });
+    const again = await send({ type: 'wizardBegin' });
+    await fakeBrowser.tabs.update(again.data.tabId, { url: 'https://www.google.com/search?q=lineup' });
+    rows = [];
+    await send({ type: 'refresh' });
+    const w = await wizardItem.getValue();
+    expect(w?.tabId).not.toBe(again.data.tabId);
+    expect((await fakeBrowser.tabs.get(again.data.tabId)).url).toBe('https://www.google.com/search?q=lineup');
   });
 });

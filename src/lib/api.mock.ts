@@ -10,35 +10,35 @@ type Listener = (s: AppState) => void;
 
 const ACCOUNTS: Account[] = [
   {
-    email: 'ana.reyes@gmail.com',
+    email: 'ana.reyes@example.com',
     name: 'Ana Reyes',
     photo: '',
     index: 0,
     signedOut: false,
   },
   {
-    email: 'ana@northwind.studio',
+    email: 'ana@northwind.example.org',
     name: 'Ana Reyes',
     photo: '',
     index: 1,
     signedOut: false,
   },
   {
-    email: 'orders@lunabakeshop.ph',
+    email: 'orders@lunabakeshop.example.net',
     name: 'Luna Bakeshop',
     photo: '',
     index: 2,
     signedOut: false,
   },
   {
-    email: 'amreyes2@up.edu.ph',
+    email: 'amreyes2@university.example.org',
     name: 'Ana Marie Reyes',
     photo: '',
     index: 3,
     signedOut: false,
   },
   {
-    email: 'ana.reyes.old@gmail.com',
+    email: 'ana.reyes.old@example.com',
     name: 'Ana Reyes',
     photo: '',
     index: -1,
@@ -48,20 +48,20 @@ const ACCOUNTS: Account[] = [
 
 const PREFS: Prefs = {
   order: [
-    'ana@northwind.studio',
-    'ana.reyes@gmail.com',
-    'orders@lunabakeshop.ph',
-    'amreyes2@up.edu.ph',
-    'ana.reyes.old@gmail.com',
+    'ana@northwind.example.org',
+    'ana.reyes@example.com',
+    'orders@lunabakeshop.example.net',
+    'amreyes2@university.example.org',
+    'ana.reyes.old@example.com',
   ],
   meta: {
-    'ana@northwind.studio': { label: 'Work', color: 'blue' },
-    'ana.reyes@gmail.com': { label: 'Personal', color: 'green' },
-    'orders@lunabakeshop.ph': { label: 'Bakeshop', color: 'amber' },
-    'amreyes2@up.edu.ph': { label: 'School', color: 'violet' },
+    'ana@northwind.example.org': { label: 'Work', color: 'blue' },
+    'ana.reyes@example.com': { label: 'Personal', color: 'green' },
+    'orders@lunabakeshop.example.net': { label: 'Bakeshop', color: 'amber' },
+    'amreyes2@university.example.org': { label: 'School', color: 'violet' },
   },
   pinEnabled: true,
-  serviceDefaults: { youtube: 'ana.reyes@gmail.com', photos: 'ana.reyes@gmail.com' },
+  serviceDefaults: { youtube: 'ana.reyes@example.com', photos: 'ana.reyes@example.com' },
   disabledServices: ['maps'],
 };
 
@@ -165,7 +165,7 @@ function presetWizard(): WizardState | null {
         current: 1,
         completed: [queue[0]!],
         tabId: 7,
-        error: 'You signed in as amreyes2@up.edu.ph.',
+        error: 'You signed in as amreyes2@university.example.org.',
       };
     case 'tab-closed':
       return { ...base, phase: 'error', errorKind: 'tab-closed', current: 1, completed: [queue[0]!], error: 'The Google tab was closed.' };
@@ -222,7 +222,7 @@ async function handle(req: Request): Promise<unknown> {
     case 'activeTabService':
       return tabNone
         ? { serviceId: null, email: null }
-        : { serviceId: 'gmail', email: 'ana.reyes@gmail.com' };
+        : { serviceId: 'gmail', email: 'ana.reyes@example.com' };
     case 'wizardOpen': {
       const cur = state.wizard;
       if (cur && (cur.phase === 'signing-out' || cur.phase === 'signing-in' || cur.phase === 'error')) return clone(cur);
@@ -257,6 +257,19 @@ async function handle(req: Request): Promise<unknown> {
       const next: WizardState = { ...w, phase: 'signing-in', error: undefined, errorKind: undefined, tabId: 7 };
       setWizard(next);
       if (timer) clearTimeout(timer);
+      timer = setTimeout(advance, 4200);
+      return next;
+    }
+    case 'wizardContinue': {
+      const w = state.wizard;
+      if (!w) throw new Error('No reorder in progress.');
+      if (w.phase !== 'signing-out') return clone(w);
+      // Pretend Chrome sync kept the first account signed in.
+      const kept = signedInOrder().slice(0, 1).map((a) => a.email);
+      if (timer) clearTimeout(timer);
+      const current = Math.max(0, w.queue.findIndex((e) => !kept.includes(e)));
+      const next: WizardState = { ...w, phase: 'signing-in', current, completed: kept, kept };
+      setWizard(next);
       timer = setTimeout(advance, 4200);
       return next;
     }

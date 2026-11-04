@@ -49,6 +49,7 @@ export const SERVICES: readonly Service[] = [
   // Media
   { id: 'youtube', name: 'YouTube', home: 'https://www.youtube.com/', hosts: ['www.youtube.com', 'm.youtube.com'], prefix: '', style: 'query', never: ['/(?:logout|signin|redirect)(?:[/?#]|$)'], caveat: 'Brand channels are picked inside YouTube, not by account number.' },
   { id: 'youtube-studio', name: 'YouTube Studio', home: 'https://studio.youtube.com/', hosts: ['studio.youtube.com'], prefix: '', style: 'query', caveat: 'Brand channels are picked inside YouTube, not by account number.' },
+  // www.google.com is here only for Maps: Lineup routes and switches nothing else on it (not Search).
   { id: 'maps', name: 'Maps', home: 'https://www.google.com/maps', hosts: ['www.google.com'], prefix: '/maps', style: 'query', caveat: 'Only saved places and history depend on the account.' },
   // Developer and business
   { id: 'cloud', name: 'Cloud console', home: 'https://console.cloud.google.com/', hosts: ['console.cloud.google.com'], prefix: '', style: 'query' },
@@ -66,8 +67,7 @@ export const SERVICES: readonly Service[] = [
 /** Other Google hosts that accept ?authuser. Used by "switch this tab", never by pin mode. */
 export const EXTRA_QUERY_HOSTS: readonly string[] = [
   'groups.google.com', 'voice.google.com', 'script.google.com', 'colab.research.google.com',
-  'aistudio.google.com', 'one.google.com', 'takeout.google.com', 'myactivity.google.com',
-  'passwords.google.com', 'pay.google.com', 'merchants.google.com', 'business.google.com',
+  'aistudio.google.com', 'one.google.com', 'merchants.google.com', 'business.google.com',
   'admanager.google.com', 'tasks.google.com', 'shell.cloud.google.com', 'issuetracker.google.com',
   'workspace.google.com', 'news.google.com', 'music.youtube.com',
 ];

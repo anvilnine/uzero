@@ -3,7 +3,7 @@ import { isTrustedSender, parseRequest } from './messages';
 
 describe('parseRequest', () => {
   it.each([
-    'getState', 'refresh', 'listServices', 'activeTabService', 'wizardBegin', 'wizardSkip', 'wizardRetry', 'wizardReopen', 'wizardFocusTab', 'wizardCancel',
+    'getState', 'refresh', 'listServices', 'activeTabService', 'wizardBegin', 'wizardSkip', 'wizardRetry', 'wizardContinue', 'wizardReopen', 'wizardFocusTab', 'wizardCancel',
   ])('accepts %s and drops extra fields', (type) => {
     expect(parseRequest({ type, junk: 1 })).toEqual({ type });
   });

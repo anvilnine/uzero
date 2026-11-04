@@ -1,20 +1,14 @@
 // Export / import of Prefs as JSON, with strict validation on the way in.
-import type { AccountMeta, LabelColor, Prefs } from '../lib/types';
-import { LABEL_COLORS, cleanLabel } from './model';
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const SERVICE_ID = /^[a-z0-9-]{1,40}$/;
+// Same rules as lib/store, which the background applies again when the prefs are saved.
+import type { AccountMeta, Prefs } from '../lib/types';
+import { MAX_ACCOUNTS, normalizeEmail } from '../lib/accounts';
+import { SERVICE_IDS } from '../lib/services';
+import { isLabelColor, sanitizeLabel } from '../lib/labels';
 
 export const FILE_KIND = 'lineup-prefs';
 
 export function exportPrefs(prefs: Prefs): string {
   return JSON.stringify({ kind: FILE_KIND, version: 1, prefs }, null, 2);
-}
-
-function email(x: unknown): string | null {
-  if (typeof x !== 'string') return null;
-  const e = x.trim().toLowerCase();
-  return e.length <= 254 && EMAIL.test(e) ? e : null;
 }
 
 export type ImportResult = { ok: true; prefs: Prefs; skipped: number } | { ok: false; error: string };
@@ -38,25 +32,25 @@ export function parsePrefs(text: string): ImportResult {
 
   let skipped = 0;
   const order: string[] = [];
-  for (const x of p.order.slice(0, 100)) {
-    const e = email(x);
+  for (const x of p.order.slice(0, MAX_ACCOUNTS)) {
+    const e = normalizeEmail(x);
     if (e && !order.includes(e)) order.push(e);
     else skipped++;
   }
 
   const meta: Record<string, AccountMeta> = {};
   if (p.meta && typeof p.meta === 'object') {
-    for (const [k, v] of Object.entries(p.meta as Record<string, unknown>).slice(0, 100)) {
-      const e = email(k);
+    for (const [k, v] of Object.entries(p.meta as Record<string, unknown>).slice(0, MAX_ACCOUNTS)) {
+      const e = normalizeEmail(k);
       if (!e || !v || typeof v !== 'object') {
         skipped++;
         continue;
       }
       const m = v as Record<string, unknown>;
       const out: AccountMeta = {};
-      if (typeof m.label === 'string' && cleanLabel(m.label).trim()) out.label = cleanLabel(m.label).trim();
-      if (typeof m.color === 'string' && LABEL_COLORS.includes(m.color as LabelColor))
-        out.color = m.color as LabelColor;
+      const label = sanitizeLabel(m.label);
+      if (label) out.label = label;
+      if (isLabelColor(m.color)) out.color = m.color;
       meta[e] = out;
     }
   }
@@ -64,14 +58,14 @@ export function parsePrefs(text: string): ImportResult {
   const serviceDefaults: Record<string, string> = {};
   if (p.serviceDefaults && typeof p.serviceDefaults === 'object') {
     for (const [k, v] of Object.entries(p.serviceDefaults as Record<string, unknown>).slice(0, 100)) {
-      const e = email(v);
-      if (SERVICE_ID.test(k) && e) serviceDefaults[k] = e;
+      const e = normalizeEmail(v);
+      if (SERVICE_IDS.has(k) && e) serviceDefaults[k] = e;
       else skipped++;
     }
   }
 
   const disabledServices = Array.isArray(p.disabledServices)
-    ? p.disabledServices.filter((x): x is string => typeof x === 'string' && SERVICE_ID.test(x)).slice(0, 100)
+    ? [...new Set(p.disabledServices.filter((x): x is string => typeof x === 'string' && SERVICE_IDS.has(x)))]
     : [];
 
   return {

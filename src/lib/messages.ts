@@ -5,7 +5,7 @@ import { SERVICE_IDS } from './services';
 
 const NO_ARGS = new Set([
   'getState', 'refresh', 'listServices', 'activeTabService',
-  'wizardBegin', 'wizardSkip', 'wizardRetry', 'wizardReopen', 'wizardFocusTab', 'wizardCancel',
+  'wizardBegin', 'wizardSkip', 'wizardRetry', 'wizardContinue', 'wizardReopen', 'wizardFocusTab', 'wizardCancel',
 ] as const);
 
 type NoArgType = typeof NO_ARGS extends Set<infer T> ? T : never;

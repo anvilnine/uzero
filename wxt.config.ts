@@ -13,9 +13,13 @@ export default defineConfig({
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
     return {
-      name: 'Lineup — account order for Google',
+      name: 'Lineup — default account & order for Google',
       short_name: 'Lineup',
-      description: 'Put your Google accounts in your order. Open Google links in the account you pick, or truly reorder them.',
+      description:
+        'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
+      homepage_url: 'https://github.com/anvilnine/lineup',
+      // Never runs in private windows, so it never sees or changes their Google sessions.
+      incognito: 'not_allowed',
       permissions: [
         'storage',
         'declarativeNetRequestWithHostAccess',
@@ -35,7 +39,7 @@ export default defineConfig({
       ...(firefox && {
         browser_specific_settings: {
           gecko: {
-            id: 'lineup@kuyazee',
+            id: 'lineup@anvilnine',
             // data_collection_permissions needs Firefox 140+.
             strict_min_version: '140.0',
             data_collection_permissions: { required: ['none'] },

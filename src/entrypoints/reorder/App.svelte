@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
+  import { inProgress } from '../../lib/wizard';
   import type { AppState, Request, WizardState } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
   import { lineup, toneOf, type Row } from '../../ui/model';
-  import { closeView, errorText } from '../../ui/nav';
+  import { closePanel, closeView, errorText } from '../../ui/nav';
 
   /** Narrow layout for the browser's side panel, next to Google's sign-in page. */
   let { panel = false }: { panel?: boolean } = $props();
@@ -15,7 +16,10 @@
   let loadError = $state<string | null>(null);
   let actionError = $state<string | null>(null);
   let pending = $state<Request['type'] | null>(null);
+  /** The user cancelled a reorder that had already signed accounts out. */
   let cancelled = $state(false);
+  /** Sign-out has taken a while: offer to go on without it. */
+  let slowSignOut = $state(false);
   let heading = $state<HTMLElement | null>(null);
   let copied = $state<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -37,14 +41,16 @@
   );
   const currentRow = $derived(w ? queueRows[w.current] : undefined);
   const live = $derived(w?.phase === 'signing-out' || w?.phase === 'signing-in');
+  const signingOut = $derived(w?.phase === 'signing-out');
 
   // Google's order now: signed-in accounts by index.
   const googleNow = $derived(
     (app?.accounts ?? []).filter((a) => !a.signedOut && a.index >= 0).sort((a, b) => a.index - b.index),
   );
-  const matches = $derived(
-    w ? w.queue.filter((e) => w.completed.includes(e)).every((e, i) => googleNow[i]?.email === e) : false,
-  );
+  // Accounts that were signed back in (not skipped), in your order. Only these can match Google's.
+  const targets = $derived(w ? w.queue.filter((e) => w.completed.includes(e)) : []);
+  const firstOff = $derived(targets.findIndex((e, i) => googleNow[i]?.email !== e));
+  const matches = $derived(targets.length > 0 && firstOff < 0);
 
   onMount(() => {
     if (panel) document.body.classList.add('panel');
@@ -70,6 +76,14 @@
     return () => clearInterval(t);
   });
 
+  // Chrome sync can keep its own account signed in, so sign-out never finishes. After a while, offer a way on.
+  $effect(() => {
+    slowSignOut = false;
+    if (!signingOut) return;
+    const t = setTimeout(() => (slowSignOut = true), 15_000);
+    return () => clearTimeout(t);
+  });
+
   // Move focus to the new step's heading so screen readers hear it.
   let lastKey = '';
   $effect(() => {
@@ -81,20 +95,29 @@
   });
 
   async function act<
-    T extends 'wizardBegin' | 'wizardSkip' | 'wizardRetry' | 'wizardReopen' | 'wizardCancel',
+    T extends 'wizardBegin' | 'wizardSkip' | 'wizardRetry' | 'wizardContinue' | 'wizardReopen' | 'wizardCancel',
   >(type: T) {
     if (!api || !app) return;
+    const began = inProgress(app.wizard);
     pending = type;
     actionError = null;
     try {
       const next = (await api.send({ type } as Extract<Request, { type: T }>)) as WizardState | null;
       app = { ...app, wizard: next };
-      if (type === 'wizardCancel') cancelled = true;
+      if (type === 'wizardCancel') cancelled = began;
     } catch (e) {
       actionError = errorText(e);
     } finally {
       pending = null;
     }
+  }
+
+  const close = () => (panel ? closePanel() : closeView());
+
+  // Nothing was signed out yet: drop the reorder and put the panel away (a tab shows neutral copy).
+  function notNow() {
+    void act('wizardCancel');
+    if (panel) close();
   }
 
   async function goToGoogleTab() {
@@ -127,7 +150,9 @@
       case 'expired':
         return {
           heading: 'Reorder paused',
-          detail: 'Nothing happened for 30 minutes, so Pin is back on.',
+          detail: app?.prefs.pinEnabled
+            ? 'Nothing happened for 30 minutes, so Pin is back on.'
+            : 'Nothing happened for 30 minutes, so Lineup paused the reorder.',
           lede: 'Continue with this account, or skip it for now.',
           retry: 'Continue',
           tone: 'info',
@@ -213,6 +238,13 @@
     return (1 + w.current) / total;
   });
 
+  // Announced without moving focus (step changes move focus to the heading instead).
+  const liveStatus = $derived.by(() => {
+    if (copied) return `Copied ${copied}.`;
+    if (signingOut && slowSignOut) return 'Still waiting for Google. You can continue anyway.';
+    return '';
+  });
+
   const prep = [
     'Every Google account signs out, in every tab. Save any open work in Google first.',
     'Have each password and 2-Step Verification code ready.',
@@ -229,7 +261,7 @@
 {/snippet}
 
 <div class="page" class:panel>
-  <main class="card" aria-live="polite">
+  <main class="card">
     {#if w && w.phase !== 'confirm'}
       <div
         class="progress"
@@ -264,7 +296,7 @@
           : 'Put Google’s account order in your order by signing out and back in.'}
       </p>
       <div class="actions">
-        <button type="button" class="btn btn-text" onclick={closeView}>Close</button>
+        <button type="button" class="btn btn-text" onclick={close}>Close</button>
         <button type="button" class="btn btn-filled" onclick={startFresh} disabled={!!pending}>
           Start with my order
         </button>
@@ -294,9 +326,7 @@
         {/each}
       </ul>
       <div class="actions">
-        <button type="button" class="btn btn-text" onclick={() => act('wizardCancel')} disabled={!!pending}>
-          Not now
-        </button>
+        <button type="button" class="btn btn-text" onclick={notNow} disabled={!!pending}>Not now</button>
         <button type="button" class="btn btn-filled" onclick={() => act('wizardBegin')} disabled={!!pending}>
           Sign out and start
         </button>
@@ -310,8 +340,20 @@
         <span class="spinner" aria-hidden="true"></span>
         <span>Waiting for Google</span>
       </div>
+      {#if slowSignOut}
+        <p class="tip">
+          <Icon name="alert" size={18} />
+          <span>Still signed in? Chrome sync can keep its own account. Continue, and it stays where Google puts it.</span>
+        </p>
+      {/if}
       <div class="actions">
-        <span></span>
+        {#if slowSignOut}
+          <button type="button" class="btn btn-text" onclick={() => act('wizardContinue')} disabled={!!pending}>
+            Continue anyway
+          </button>
+        {:else}
+          <span></span>
+        {/if}
         <button type="button" class="btn btn-filled" onclick={goToGoogleTab} disabled={!!pending}>
           Go to the Google tab
         </button>
@@ -384,13 +426,17 @@
       {/if}
     {:else if w.phase === 'done'}
       <h1 tabindex="-1" bind:this={heading}>
-        {matches ? 'Google now uses your order' : 'Almost in order'}
+        {targets.length === 0 ? 'No accounts signed back in' : matches ? 'Google now uses your order' : 'Almost in order'}
       </h1>
       <p class="lede">
-        {#if matches}
+        {#if targets.length === 0}
+          You skipped every account. Sign in to them again at accounts.google.com.
+        {:else if matches}
           Your first account is now Google’s default.
         {:else}
-          Google put {googleNow[0]?.email ?? 'another account'} first. Chrome sync can do this.
+          {firstOff === 0
+            ? `Google put ${googleNow[0]?.email ?? 'another account'} first. Chrome sync can do this.`
+            : 'Some accounts aren’t where you put them.'}
           {app.prefs.pinEnabled
             ? 'Pin is on, so links still open as your default.'
             : 'Turn on Pin so links open as your default anyway.'}
@@ -399,17 +445,22 @@
 
       <ol class="order" aria-label="Your order compared with Google’s order now">
         {#each w.queue as email, i (email)}
-          {@const g = googleNow[i]}
+          {@const j = targets.indexOf(email)}
+          {@const g = j < 0 ? undefined : googleNow[j]}
           {@const ok = g?.email === email}
           <li>
             <span class="n">{i + 1}</span>
             <span class="who">
               <span class="who-name">{email}</span>
-              {#if !ok}
+              {#if j < 0}
+                <span class="who-email">Skipped</span>
+              {:else if !ok}
                 <span class="who-email">Google now: {g ? g.email : 'not signed in'}</span>
               {/if}
             </span>
-            {#if ok}
+            {#if j < 0}
+              <span class="mark"></span>
+            {:else if ok}
               <span class="mark ok"><Icon name="check" size={18} /><span class="sr-only">Matches</span></span>
             {:else}
               <span class="mark no"><Icon name="alert" size={18} /><span class="sr-only">Different</span></span>
@@ -419,12 +470,12 @@
       </ol>
 
       <div class="actions">
-        {#if !matches && !app.prefs.pinEnabled}
-          <button type="button" class="btn btn-text" onclick={closeView}>Close</button>
+        {#if targets.length > 0 && !matches && !app.prefs.pinEnabled}
+          <button type="button" class="btn btn-text" onclick={close}>Close</button>
           <button type="button" class="btn btn-filled" onclick={turnOnPin}>Turn on Pin</button>
         {:else}
           <span></span>
-          <button type="button" class="btn btn-filled" onclick={closeView}>Close</button>
+          <button type="button" class="btn btn-filled" onclick={close}>Close</button>
         {/if}
       </div>
     {/if}
@@ -447,6 +498,7 @@
       <p class="action-error" role="alert">{actionError}</p>
     {/if}
   </main>
+  <p class="sr-only" aria-live="polite">{liveStatus}</p>
 
   {#if w && w.phase !== 'done' && w.phase !== 'confirm'}
     <div class="below">

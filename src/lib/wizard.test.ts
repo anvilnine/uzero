@@ -199,6 +199,47 @@ describe('wizard reducer', () => {
     expect(reduce(c, { type: 'touch', now: 5 })).toBe(c);
   });
 
+  it('continue while signing out keeps accounts that won’t sign out, and never asks for them', () => {
+    // Chrome sync keeps a@x.com signed in. Queue is b, a, c.
+    let s = reduce(opened(), { type: 'begin' })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com') })!;
+    expect(s.phase).toBe('signing-out');
+    s = reduce(s, { type: 'continue', accounts: signedIn('a@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 0, completed: ['a@x.com'], kept: ['a@x.com'] });
+    // a@x.com is already there, so b@x.com is added to the session rather than chosen first.
+    expect(tabUrlFor(s)).toBe(signInUrl('b@x.com', false));
+    // Ticks with only the kept account change nothing.
+    expect(reduce(s, { type: 'accounts', accounts: signedIn('a@x.com') })).toEqual(s);
+    // b signs in: a (kept) is passed over, c is next.
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com', 'b@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 2, completed: ['a@x.com', 'b@x.com'] });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com', 'b@x.com', 'c@x.com') })!;
+    expect(s).toMatchObject({ phase: 'done', completed: ['a@x.com', 'b@x.com', 'c@x.com'] });
+  });
+
+  it('continue skips kept accounts at the head of the queue, and finishes when all are kept', () => {
+    const out = reduce(opened(), { type: 'begin' })!;
+    const s = reduce(out, { type: 'continue', accounts: signedIn('b@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 1 });
+    const all = reduce(out, { type: 'continue', accounts: signedIn('b@x.com', 'a@x.com', 'c@x.com') })!;
+    expect(all.phase).toBe('done');
+    // Nobody left signed in: same as a normal sign-out.
+    expect(reduce(out, { type: 'continue', accounts: signedOut('a@x.com') })).toMatchObject({
+      phase: 'signing-in', current: 0, completed: [], kept: undefined,
+    });
+  });
+
+  it('continue only applies while signing out; starting over forgets kept accounts', () => {
+    const c = opened();
+    expect(reduce(c, { type: 'continue', accounts: [] })).toBe(c);
+    const s = signingIn();
+    expect(reduce(s, { type: 'continue', accounts: signedIn('a@x.com') })).toBe(s);
+    let k = reduce(reduce(c, { type: 'begin' }), { type: 'continue', accounts: signedIn('a@x.com') })!;
+    k = reduce(k, { type: 'accounts', accounts: signedIn('a@x.com', 'c@x.com') })!;
+    expect(k.phase).toBe('error');
+    expect(reduce(k, { type: 'retry' })).toMatchObject({ phase: 'signing-out', completed: [], kept: undefined });
+  });
+
   it('empty queue finishes right after sign-out', () => {
     let s = reduce(null, { type: 'open', queue: [], now: 0 });
     s = reduce(s, { type: 'begin' });
@@ -218,6 +259,12 @@ describe('wizard URLs', () => {
     expect(later.searchParams.get('Email')).toBe('x&y=1@x.com');
     expect(later.searchParams.get('continue')).toBe('https://mail.google.com/mail/');
     expect([...later.searchParams.keys()]).toEqual(['Email', 'continue']);
+  });
+
+  it('signs out with a continue page on accounts.google.com, so the wizard keeps its tab', () => {
+    const url = new URL(LOGOUT_URL);
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/Logout');
+    expect(url.searchParams.get('continue')).toBe('https://accounts.google.com/');
   });
 
   it('tabUrlFor follows the phase', () => {

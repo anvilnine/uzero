@@ -10,11 +10,11 @@ import {
   type Account,
   type AccountMeta,
   type FetchStatus,
-  type LabelColor,
   type Prefs,
   type WizardState,
 } from './types';
 import { MAX_ACCOUNTS, normalizeEmail, sanitizeEmails } from './accounts';
+import { isLabelColor, sanitizeLabel } from './labels';
 import { SERVICE_IDS } from './services';
 
 export const prefsItem = storage.defineItem<Prefs>(KEY_PREFS, { fallback: DEFAULT_PREFS });
@@ -23,24 +23,8 @@ export const statusItem = storage.defineItem<FetchStatus>(KEY_STATUS, { fallback
 export const wizardItem = storage.defineItem<WizardState | null>(KEY_WIZARD, { fallback: null });
 export const loopPausesItem = storage.defineItem<Record<string, number>>(KEY_LOOP_PAUSES, { fallback: {} });
 
-export const LABEL_MAX = 24;
-
-const COLORS: ReadonlySet<LabelColor> = new Set<LabelColor>([
-  'slate', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'violet', 'pink',
-]);
-
-// Control chars plus zero-width and bidi overrides (they can spoof how a label reads).
-// eslint-disable-next-line no-control-regex
-const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g;
-
-/** Trim, drop control characters, cap at 24 chars. */
-export function sanitizeLabel(input: unknown): string {
-  if (typeof input !== 'string') return '';
-  return [...input.replace(CONTROL_RE, '').trim()]
-    .slice(0, LABEL_MAX)
-    .join('')
-    .trim();
-}
+// Label rules live in labels.ts so UI pages can use them without pulling in storage.
+export { LABEL_COLORS, LABEL_MAX, cleanLabel, isLabelColor, sanitizeLabel } from './labels';
 
 function sanitizeMeta(input: unknown): Record<string, AccountMeta> {
   const out: Record<string, AccountMeta> = {};
@@ -52,7 +36,7 @@ function sanitizeMeta(input: unknown): Record<string, AccountMeta> {
     const meta: AccountMeta = {};
     const label = sanitizeLabel(raw.label);
     if (label) meta.label = label;
-    if (typeof raw.color === 'string' && COLORS.has(raw.color as LabelColor)) meta.color = raw.color as LabelColor;
+    if (isLabelColor(raw.color)) meta.color = raw.color;
     if (meta.label || meta.color) out[email] = meta;
   }
   return out;

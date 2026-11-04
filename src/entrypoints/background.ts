@@ -25,10 +25,16 @@ const WIZARD_ALARM = 'lineup-wizard-expiry';
 const LOOP_ALARM = 'lineup-loop-pauses';
 const REFRESH_PERIOD_MIN = 15;
 const DEBOUNCE_MS = 1500;
+/** An ok status is rewritten at most this often when nothing changed (each write wakes every open page). */
+const STATUS_REFRESH_MS = 60_000;
+/** Accounts older than this get a quiet refresh when a tab lands on a pinned /u/N. */
+const PIN_STALE_MS = 5 * 60_000;
 const ORIGIN_RULE_ID = 1;
 const ACCOUNTS_HOST = 'accounts.google.com';
 /** Pages the wizard's Google tab may show. Anywhere else, the user took the tab over. */
 const WIZARD_HOSTS: ReadonlySet<string> = new Set(ACCOUNT_HOSTS);
+/** Google's home page, where Logout can land instead. Only counts while signing out. */
+const LOGOUT_LANDING = 'www.google.com';
 const REORDER_PAGE = '/reorder.html' as PublicPath;
 const PANEL_PAGE = '/sidepanel.html' as PublicPath;
 // BROWSER (not FIREFOX): vitest defines env flags as strings, so "false" would be truthy there.
@@ -116,18 +122,36 @@ async function syncAlarm(pinEnabled: boolean): Promise<void> {
 /** Replace all dynamic rules in one atomic call. Pin mode pauses while the wizard runs. */
 function syncRules(): Promise<void> {
   return rulesLock(async () => {
-    const [prefs, accounts, wizard] = await Promise.all([
-      prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
-    ]);
-    const paused = isActive(wizard);
-    const rules = paused ? [] : buildRules(prefs, accounts);
-    pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
+    try {
+      const [prefs, accounts, wizard] = await Promise.all([
+        prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
+      ]);
+      const paused = isActive(wizard);
+      const rules = paused ? [] : buildRules(prefs, accounts);
+      pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
+      const existing = await browser.declarativeNetRequest.getDynamicRules();
+      await browser.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: existing.map((r) => r.id),
+        addRules: rules as unknown as DnrRule[],
+      });
+    } catch (e) {
+      console.error('[lineup] rules', e);
+      await clearRules();
+    }
+  });
+}
+
+/** Fail closed: with no rules, links open where Google sends them, never at a stale /u/N. */
+async function clearRules(): Promise<void> {
+  pinHosts = new Map();
+  try {
     const existing = await browser.declarativeNetRequest.getDynamicRules();
-    await browser.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: existing.map((r) => r.id),
-      addRules: rules as unknown as DnrRule[],
-    });
-  }).catch((e) => console.error('[lineup] rules', e));
+    if (existing.length) {
+      await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id) });
+    }
+  } catch (e) {
+    console.error('[lineup] clearing rules', e);
+  }
 }
 
 let originReady: Promise<void> | null = null;
@@ -167,12 +191,15 @@ function installFirefoxOriginFallback(): void {
 
 // ---- loop breaker ------------------------------------------------------------------
 // If Google keeps sending a tab back to a URL without an account, pin mode would bounce it forever.
-// 3 pinned navigations of one tab to one host within 3 s pause pin there for 10 minutes.
+// 3 jumps of one tab from a URL without an account to the pinned one, on one host within 3 s,
+// pause pin there for 10 minutes. Reloads and in-app navigation never count.
 
 /** Pinned host -> index, as installed by syncRules. Null until computed in this worker's life. */
 let pinHosts: Map<string, number> | null = null;
 /** `${tabId} ${host}` -> recent navigation times. Memory only. */
 const loopHits = new Map<string, number[]>();
+/** Last URL seen per tab (Lineup's hosts only). Memory only. */
+const tabUrls = new Map<number, string>();
 const ACCOUNT_IN_URL = /[?&]authuser=|\/u\/\d/;
 
 async function currentPinHosts(): Promise<Map<string, number>> {
@@ -184,12 +211,15 @@ async function currentPinHosts(): Promise<Map<string, number>> {
   return pinHosts;
 }
 
-async function checkLoop(tabId: number, url: string): Promise<void> {
+/** `url` replaced `prev` in a tab. Counts a hit when pin just added the account to a bare URL. */
+async function checkLoop(tabId: number, prev: string | undefined, url: string): Promise<void> {
   if (!ACCOUNT_IN_URL.test(url)) return;
   const host = hostOf(url);
   if (!host) return;
   const n = (await currentPinHosts()).get(host);
   if (n === undefined || !namesAccount(url, n)) return;
+  void refreshIfStale();
+  if (!prev || hostOf(prev) !== host || ACCOUNT_IN_URL.test(prev)) return;
   const key = `${tabId} ${host}`;
   const { hits, loop } = recordHit(loopHits.get(key) ?? [], Date.now());
   if (!loop) {
@@ -199,6 +229,12 @@ async function checkLoop(tabId: number, url: string): Promise<void> {
   loopHits.delete(key);
   console.warn(`[lineup] ${host} keeps redirecting; pin is paused there for 10 minutes.`);
   await updateLoopPauses((p) => ({ ...p, [host]: Date.now() + LOOP_PAUSE_MS }));
+}
+
+/** A tab just opened a pinned /u/N: if the account list is old, check that N is still right. */
+async function refreshIfStale(): Promise<void> {
+  const status = await statusItem.getValue();
+  if (status.kind === 'ok' && Date.now() - status.at > PIN_STALE_MS) scheduleRefresh(0);
 }
 
 function sweepLoopPauses(): Promise<void> {
@@ -254,7 +290,11 @@ async function doRefresh(): Promise<void> {
   const accountsChanged = !sameJson(prevAccounts, accounts);
   if (accountsChanged) await accountsItem.setValue(accounts);
   const { prev, next } = await updatePrefs((p) => ({ ...p, order: mergeOrder(p.order, accounts) }));
-  await statusItem.setValue({ kind: 'ok', at: Date.now() });
+  // Wizard pages refresh every 3 s; an unchanged ok status is only rewritten once a minute.
+  const now = Date.now();
+  if (status.kind !== 'ok' || accountsChanged || now - status.at >= STATUS_REFRESH_MS) {
+    await statusItem.setValue({ kind: 'ok', at: now });
+  }
 
   await wizardStep({ type: 'accounts', accounts });
   if (accountsChanged || !sameJson(prev.order, next.order)) await syncRules();
@@ -284,8 +324,13 @@ function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Brow
     scheduleRefresh();
   }
   // The rest needs the URL, which host permissions only expose on Lineup's own hosts.
-  if (!tab.url) return;
-  if (info.status === 'loading') void checkLoop(tabId, tab.url);
+  const prevUrl = tabUrls.get(tabId);
+  if (!tab.url) {
+    tabUrls.delete(tabId);
+    return;
+  }
+  tabUrls.set(tabId, tab.url);
+  if (tab.url !== prevUrl) void checkLoop(tabId, prevUrl, tab.url);
   if (info.status === 'complete') {
     // Wizard tick: its tab finished a page. The user is busy signing in, so the wizard isn't idle.
     void wizardItem.getValue().then((w) => {
@@ -299,6 +344,7 @@ function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Brow
 async function onTabRemoved(tabId: number): Promise<void> {
   if (accountsTabs.delete(tabId)) scheduleRefresh();
   for (const key of loopHits.keys()) if (key.startsWith(`${tabId} `)) loopHits.delete(key);
+  tabUrls.delete(tabId);
   const w = await wizardItem.getValue();
   if (w?.tabId === tabId) await wizardStep({ type: 'tabClosed' });
 }
@@ -382,17 +428,35 @@ async function focusWindow(windowId: number | undefined): Promise<void> {
   await browser.windows.update(windowId, { focused: true }).catch(() => undefined);
 }
 
-/** The wizard's Google tab, but only while it still shows a Google account page. */
-async function ownGoogleTab(tabId: number | undefined): Promise<Browser.tabs.Tab | undefined> {
+function isWizardPage(url: string | undefined, signingOut: boolean): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    if (WIZARD_HOSTS.has(u.hostname)) return true;
+    return signingOut && u.hostname === LOGOUT_LANDING && u.pathname === '/';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The wizard's Google tab, but only while it still shows a Google account page
+ * (or, with `signingOut`, Google's home page, where Logout may land).
+ */
+async function ownGoogleTab(tabId: number | undefined, signingOut = false): Promise<Browser.tabs.Tab | undefined> {
   if (tabId === undefined) return undefined;
   const tab = await browser.tabs.get(tabId).catch(() => undefined);
-  const host = hostOf(tab?.url ?? tab?.pendingUrl);
-  return tab && host && WIZARD_HOSTS.has(host) ? tab : undefined;
+  return tab && isWizardPage(tab.url ?? tab.pendingUrl, signingOut) ? tab : undefined;
 }
 
 /** Point the wizard's Google tab at `url`: reuse it if it is still ours, else open a new one. */
-async function showGoogleTab(tabId: number | undefined, url: string, focus: boolean): Promise<number | undefined> {
-  const own = await ownGoogleTab(tabId);
+async function showGoogleTab(
+  tabId: number | undefined,
+  url: string,
+  focus: boolean,
+  signingOut: boolean,
+): Promise<number | undefined> {
+  const own = await ownGoogleTab(tabId, signingOut);
   if (own?.id !== undefined) {
     try {
       await browser.tabs.update(own.id, { url, active: true });
@@ -413,21 +477,23 @@ async function wizardEffects(
   reopen: boolean,
 ): Promise<WizardState | null> {
   if (!next) return next;
+  // The tab may still be on Logout's landing page when the step moves on.
+  const signingOut = prev?.phase === 'signing-out' || next.phase === 'signing-out';
   if (next.phase === 'done') {
     // Close the Google tab only if the user didn't take it somewhere else.
-    const own = await ownGoogleTab(next.tabId);
+    const own = await ownGoogleTab(next.tabId, signingOut);
     if (own?.id !== undefined) await browser.tabs.remove(own.id).catch(() => undefined);
     return { ...next, tabId: undefined };
   }
   const url = tabUrlFor(next);
   if (!url || (!stepChanged(prev, next) && !reopen)) return next;
-  return { ...next, tabId: await showGoogleTab(next.tabId, url, reopen) };
+  return { ...next, tabId: await showGoogleTab(next.tabId, url, reopen, signingOut) };
 }
 
 async function wizardCancel(): Promise<null> {
   await wizardLock(async () => {
     const w = await wizardItem.getValue();
-    const own = await ownGoogleTab(w?.tabId);
+    const own = await ownGoogleTab(w?.tabId, w?.phase === 'signing-out');
     if (own?.id !== undefined) await browser.tabs.remove(own.id).catch(() => undefined);
     await wizardItem.setValue(null);
     await browser.alarms.clear(WIZARD_ALARM);
@@ -479,6 +545,20 @@ async function wizardAction(type: 'begin' | 'skip' | 'retry'): Promise<WizardSta
   return state;
 }
 
+/**
+ * "Continue anyway": sign-out is stuck because some accounts stay signed in (Chrome sync puts its
+ * own back). Look once more, then go on to sign-in with those accounts counted as already there.
+ */
+async function wizardContinue(): Promise<WizardState> {
+  await refresh();
+  const status = await statusItem.getValue();
+  if (status.kind === 'error') throw new Error('Couldn’t check your Google accounts. Try again.');
+  const state = await wizardStep({ type: 'continue', accounts: await accountsItem.getValue() });
+  if (!state) throw new Error('No reorder in progress.');
+  if (isActive(state)) scheduleRefresh();
+  return state;
+}
+
 /** "Reopen sign-in": send the Google tab back to the current step's page, even if the step didn't change. */
 async function wizardReopen(): Promise<WizardState> {
   const state = await wizardStep({ type: 'touch', now: Date.now() }, { reopen: true });
@@ -490,7 +570,7 @@ async function wizardReopen(): Promise<WizardState> {
 async function wizardFocusTab(): Promise<ResponseMap['wizardFocusTab']> {
   const w = await wizardItem.getValue();
   if (!isActive(w)) return { ok: false };
-  const own = await ownGoogleTab(w!.tabId);
+  const own = await ownGoogleTab(w!.tabId, w!.phase === 'signing-out');
   if (own?.id === undefined) {
     await wizardReopen();
     return { ok: true };
@@ -536,6 +616,8 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       return wizardAction('skip');
     case 'wizardRetry':
       return wizardAction('retry');
+    case 'wizardContinue':
+      return wizardContinue();
     case 'wizardReopen':
       return wizardReopen();
     case 'wizardFocusTab':

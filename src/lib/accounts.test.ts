@@ -80,6 +80,15 @@ describe('parseListAccounts', () => {
     expect(out.map((a) => a.index)).toEqual([0, 1]);
   });
 
+  it('treats an out-of-range index like a missing one', () => {
+    const out = parseListAccounts(
+      body([row({ email: 'a@x.com', index: 0 }), row({ email: 'b@x.com', index: 100 }), row({ email: 'c@x.com', index: 99 })]),
+    );
+    expect(out.map((a) => [a.email, a.index])).toEqual([['a@x.com', 0], ['b@x.com', 1], ['c@x.com', 99]]);
+    const [big] = parseListAccounts(body([row({ email: 'z@x.com', index: 1e9 })]));
+    expect(big?.index).toBe(0);
+  });
+
   it("strips the )]}' prefix", () => {
     const out = parseListAccounts(`)]}'\n${body([row({ email: 'a@x.com', index: 0 })])}`);
     expect(out).toHaveLength(1);

@@ -1,17 +1,10 @@
 // UI-only helpers shared by popup, options and the reorder wizard.
 import type { Account, AccountMeta, AppState, LabelColor, Prefs } from '../lib/types';
+import { safePhoto } from '../lib/accounts';
+import { LABEL_COLORS, isLabelColor } from '../lib/labels';
 
-export const LABEL_COLORS: LabelColor[] = [
-  'slate',
-  'red',
-  'orange',
-  'amber',
-  'green',
-  'teal',
-  'blue',
-  'violet',
-  'pink',
-];
+// Label rules live in lib/labels (the background applies the same ones before storing).
+export { LABEL_COLORS, LABEL_MAX, cleanLabel } from '../lib/labels';
 
 export const COLOR_NAMES: Record<LabelColor, string> = {
   slate: 'Slate',
@@ -24,8 +17,6 @@ export const COLOR_NAMES: Record<LabelColor, string> = {
   violet: 'Violet',
   pink: 'Pink',
 };
-
-export const LABEL_MAX = 24;
 
 /** One row of the user's lineup: their slot, plus what Google knows (if anything). */
 export interface Row {
@@ -76,21 +67,12 @@ export function toneOf(row: { email: string; meta: AccountMeta }): LabelColor {
   return row.meta.color ?? autoTone(row.email);
 }
 
-export function cleanLabel(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, LABEL_MAX);
-}
-
 export function move<T>(list: T[], from: number, to: number): T[] {
   const next = [...list];
   const [item] = next.splice(from, 1);
   if (item === undefined) return list;
   next.splice(Math.max(0, Math.min(next.length, to)), 0, item);
   return next;
-}
-
-export function sameOrder(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 // ---- Popup paint cache -------------------------------------------------------
@@ -118,7 +100,7 @@ function isMeta(v: unknown): v is AccountMeta {
   return (
     isObj(v) &&
     (v.label === undefined || typeof v.label === 'string') &&
-    (v.color === undefined || LABEL_COLORS.includes(v.color as LabelColor))
+    (v.color === undefined || isLabelColor(v.color))
   );
 }
 
@@ -148,8 +130,10 @@ export function readCache(): AppState | null {
       localStorage.removeItem(CACHE_KEY);
       return null;
     }
+    // Photos are rendered as <img>, so only Google's image hosts survive, as on the way in.
+    const accounts = s.accounts.map((a) => ({ ...a, photo: safePhoto(a.photo) }));
     // Status and wizard are never trusted from the cache; the background sends the real ones.
-    return { accounts: s.accounts, prefs: s.prefs, status: { kind: 'idle' }, wizard: null };
+    return { accounts, prefs: s.prefs, status: { kind: 'idle' }, wizard: null };
   } catch {
     return null;
   }
@@ -162,8 +146,4 @@ export function writeCache(s: AppState): void {
   } catch {
     /* storage full or blocked: painting from cache is optional */
   }
-}
-
-export function patchPrefs(state: AppState, patch: Partial<Prefs>): AppState {
-  return { ...state, prefs: { ...state.prefs, ...patch } };
 }

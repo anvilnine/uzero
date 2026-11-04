@@ -104,6 +104,11 @@ export interface WizardState {
   current: number;
   /** Emails confirmed signed in so far, in the order Google reports them. */
   completed: string[];
+  /**
+   * Accounts that stayed signed in when the user chose "Continue anyway" during sign-out
+   * (e.g. Chrome sync's own account). They count as already present and are never asked for.
+   */
+  kept?: string[];
   /** Id of the Google tab the wizard opened, if any. */
   tabId?: number;
   /** Id of the reorder.html tab, so "Make it real" can focus it instead of opening another. */
@@ -136,6 +141,8 @@ export type Request =
   | { type: 'wizardBegin' }
   | { type: 'wizardSkip' }
   | { type: 'wizardRetry' }
+  /** Stop waiting for sign-out: go on to sign-in, keeping accounts that are still signed in. */
+  | { type: 'wizardContinue' }
   /** Send the wizard's Google tab back to the current step's page (opens a new tab if needed). */
   | { type: 'wizardReopen' }
   /** Bring the wizard's Google tab and its window to the front. */
@@ -154,6 +161,7 @@ export interface ResponseMap {
   wizardBegin: WizardState;
   wizardSkip: WizardState;
   wizardRetry: WizardState;
+  wizardContinue: WizardState;
   wizardReopen: WizardState;
   wizardFocusTab: { ok: boolean };
   wizardCancel: null;

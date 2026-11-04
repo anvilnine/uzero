@@ -10,6 +10,8 @@ export type WizardEvent =
   | { type: 'accounts'; accounts: readonly Account[] }
   | { type: 'skip' }
   | { type: 'retry' }
+  /** "Continue anyway" while signing out: `accounts` is the latest list; whoever is still in stays. */
+  | { type: 'continue'; accounts: readonly Account[] }
   | { type: 'tabOpened'; tabId: number }
   | { type: 'tabClosed' }
   /** The reorder.html tab was opened (or found again). */
@@ -49,8 +51,10 @@ function fail(s: WizardState, errorKind: WizardErrorKind, error: string, patch: 
 const signedInEmails = (accounts: readonly Account[]) =>
   accounts.filter((a) => !a.signedOut && a.index >= 0).sort((a, b) => a.index - b.index).map((a) => a.email);
 
-/** Move to queue[current], or finish. */
+/** Move to queue[current] (past any kept accounts), or finish. */
 function signInAt(s: WizardState, current: number): WizardState {
+  const kept = new Set(s.kept);
+  while (current < s.queue.length && kept.has(s.queue[current]!)) current++;
   if (current >= s.queue.length) {
     return { ...s, phase: 'done', current: s.queue.length, error: undefined, errorKind: undefined };
   }
@@ -75,6 +79,11 @@ function inPlace(s: WizardState, signedIn: readonly string[], expected: string):
 function onTrack(s: WizardState): boolean {
   const done = s.queue.slice(0, s.current);
   return s.completed.length === done.length && s.completed.every((e, i) => e === done[i]);
+}
+
+/** Back to the start: sign out of everything. */
+function signOut(s: WizardState): WizardState {
+  return { ...s, phase: 'signing-out', current: 0, completed: [], kept: undefined, error: undefined, errorKind: undefined };
 }
 
 export function reduce(state: WizardState | null, ev: WizardEvent): WizardState | null {
@@ -102,7 +111,7 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
 
     case 'begin':
       if (state.phase !== 'confirm' && state.phase !== 'error') return state;
-      return { ...state, phase: 'signing-out', current: 0, completed: [], error: undefined, errorKind: undefined };
+      return signOut(state);
 
     case 'tabOpened':
       return { ...state, tabId: ev.tabId };
@@ -119,13 +128,20 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
       if (state.phase !== 'error') return state;
       // Resume when the order so far is right; otherwise sign out and start over.
       if (state.current > 0 && onTrack(state)) return signInAt(state, state.current);
-      return { ...state, phase: 'signing-out', current: 0, completed: [], error: undefined, errorKind: undefined };
+      return signOut(state);
+
+    case 'continue': {
+      if (state.phase !== 'signing-out') return state;
+      // Some accounts won't sign out (Chrome sync puts its own back). Count them as already there.
+      const still = signedInEmails(ev.accounts);
+      return signInAt({ ...state, completed: still, kept: still.length > 0 ? still : undefined }, 0);
+    }
 
     case 'accounts': {
       const signedIn = signedInEmails(ev.accounts);
       if (state.phase === 'signing-out') {
         if (signedIn.length > 0) return state;
-        return signInAt({ ...state, completed: [] }, 0);
+        return signInAt({ ...state, completed: [], kept: undefined }, 0);
       }
       if (state.phase !== 'signing-in') return state;
 
@@ -157,7 +173,12 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
   }
 }
 
-export const LOGOUT_URL = 'https://accounts.google.com/Logout';
+/** Sign out of every account, then stay on accounts.google.com so the wizard keeps its tab. */
+export const LOGOUT_URL = (() => {
+  const url = new URL('https://accounts.google.com/Logout');
+  url.searchParams.set('continue', 'https://accounts.google.com/');
+  return url.href;
+})();
 export const CONTINUE_URL = 'https://myaccount.google.com/';
 
 /** First sign-in uses AccountChooser, later ones AddSession (adds to the existing session). */

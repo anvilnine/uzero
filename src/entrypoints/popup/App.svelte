@@ -3,6 +3,7 @@
   import { flip } from 'svelte/animate';
   import { getApi, type Api } from '../../lib/api';
   import { pinEmail } from '../../lib/accounts';
+  import { inProgress } from '../../lib/wizard';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
@@ -41,8 +42,8 @@
   });
   // A reorder that was started and not finished: offer to resume it instead of starting another.
   const reorder = $derived.by(() => {
-    const w = app?.wizard;
-    if (!w || (w.phase !== 'signing-out' && w.phase !== 'signing-in' && w.phase !== 'error')) return null;
+    const w = app?.wizard ?? null;
+    if (!w || !inProgress(w)) return null;
     return { expired: w.phase === 'error' && w.errorKind === 'expired', queue: w.queue };
   });
   const sheetRow = $derived(rows.find((r) => r.email === sheetFor) ?? null);
@@ -184,10 +185,12 @@
   async function makeItReal() {
     if (!api || !app) return;
     // The steps sit next to Google's sign-in page in the side panel, when the browser has one.
-    const panel = openSidePanel(windowId);
+    // Opened before any await (it needs this click); if it fails, the reorder tab opens instead.
+    const opening = openSidePanel(windowId);
     try {
       // While a reorder runs, the background keeps it and just brings its page back.
       const queue = reorder?.queue ?? rows.filter((r) => !r.inactive).map((r) => r.email);
+      const panel = await opening;
       await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
       closeView();
     } catch (e) {
@@ -448,7 +451,7 @@
                 type="button"
                 class="row-main"
                 aria-disabled={!canSwitch || r.inactive}
-                aria-describedby="row-hint row-keys"
+                aria-describedby={rows.length > 1 ? 'row-hint row-keys' : 'row-hint'}
                 aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
                 onclick={() => switchTo(r)}
                 onkeydown={(e) => onRowKey(e, r)}
@@ -513,7 +516,7 @@
       {#if reorder}
         <p>
           {#if reorder.expired}
-            Reorder paused. Pin is back on.
+            Reorder paused.{app.prefs.pinEnabled ? ' Pin is back on.' : ''}
           {:else}
             Reorder in progress.
           {/if}
