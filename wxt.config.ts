@@ -26,6 +26,7 @@ export default defineConfig({
         'alarms',
         // Firefox: DNR can't match our moz-extension:// initiator, so Origin is set via webRequest.
         ...(firefox ? ['webRequest', 'webRequestBlocking'] : []),
+        ...(browser === 'safari' ? ['scripting', 'tabs'] : []),
       ],
       // Exactly the hosts Uzero routes or reads, https only (see permissionHosts in services.ts).
       host_permissions: permissionHosts().map((h) => `https://${h}/*`),
