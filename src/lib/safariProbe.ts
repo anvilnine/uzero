@@ -44,16 +44,22 @@ export async function runSafariProbe(): Promise<void> {
   await withRule('A2 tabIds -1', { tabIds: [-1] });
   await withRule('A3 no condition beyond url', {});
 
-  // B: run the fetch inside an open Google tab, where the request is same-site and carries Google's own Origin.
+  // B: open accounts.google.com in a background tab, run the fetch inside it (same origin, Google's cookies), close it.
+  let tabId: number | undefined;
   try {
     const all = await browser.tabs.query({});
-    const withUrl = all.filter((t) => t.url);
-    const tabs = withUrl.filter((t) => /^https:\/\/[a-z.]*google\.com\//.test(t.url!));
-    console.log(TAG, 'B tabs total', all.length, 'with visible url', withUrl.length, 'google', tabs.length);
-    const tab = tabs.find((t) => t.id !== undefined);
-    if (!tab?.id) { console.log(TAG, 'B skipped: open any google.com page and click the icon again'); return; }
+    console.log(TAG, 'B tabs open', all.length, 'hosts', all.map((t) => (t.url ? new URL(t.url).host : '(hidden)')).join(','));
+    const tab = await browser.tabs.create({ url: 'https://accounts.google.com/robots.txt', active: false });
+    tabId = tab.id;
+    await new Promise<void>((resolve) => {
+      const done = (id: number, info: { status?: string }) => {
+        if (id === tabId && info.status === 'complete') { browser.tabs.onUpdated.removeListener(done); resolve(); }
+      };
+      browser.tabs.onUpdated.addListener(done);
+      setTimeout(resolve, 8000);
+    });
     const [res] = await browser.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId: tabId! },
       func: async (url: string) => {
         try {
           const r = await fetch(url, { method: 'POST', credentials: 'include', cache: 'no-store' });
@@ -63,8 +69,10 @@ export async function runSafariProbe(): Promise<void> {
       },
       args: [LIST_ACCOUNTS_URL],
     });
-    console.log(TAG, 'B in-tab fetch on', new URL(tab.url ?? 'https://x').host, '->', res?.result);
+    console.log(TAG, 'B background-tab fetch ->', res?.result);
   } catch (e) {
     console.log(TAG, 'B failed', String(e));
+  } finally {
+    if (tabId !== undefined) await browser.tabs.remove(tabId).catch(() => {});
   }
 }
