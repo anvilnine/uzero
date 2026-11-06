@@ -46,8 +46,10 @@ export async function runSafariProbe(): Promise<void> {
 
   // B: run the fetch inside an open Google tab, where the request is same-site and carries Google's own Origin.
   try {
-    const tabs = await browser.tabs.query({ url: ['https://*.google.com/*'] });
-    console.log(TAG, 'B google tabs open', tabs.length);
+    const all = await browser.tabs.query({});
+    const withUrl = all.filter((t) => t.url);
+    const tabs = withUrl.filter((t) => /^https:\/\/[a-z.]*google\.com\//.test(t.url!));
+    console.log(TAG, 'B tabs total', all.length, 'with visible url', withUrl.length, 'google', tabs.length);
     const tab = tabs.find((t) => t.id !== undefined);
     if (!tab?.id) { console.log(TAG, 'B skipped: open any google.com page and click the icon again'); return; }
     const [res] = await browser.scripting.executeScript({
