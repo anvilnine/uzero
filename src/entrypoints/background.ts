@@ -4,6 +4,7 @@ import { browser, type Browser, type PublicPath } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import type { Account, AppState, Envelope, Prefs, Request, ResponseMap, WizardState } from '@/lib/types';
 import { fetchAccounts, indexByEmail } from '@/lib/accounts';
+import { fetchAccountsViaTab, isGoogleTabUrl, NoGoogleTabError } from '@/lib/safariAccounts';
 import {
   LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
@@ -283,11 +284,19 @@ async function doRefresh(): Promise<void> {
 
   let accounts: Account[];
   try {
-    await ensureOriginRule();
-    if (IS_SAFARI) console.log('[uzero-safari] fetching ListAccounts, own host', OWN_HOST, 'id', browser.runtime.id);
-    accounts = await fetchAccounts();
-    if (IS_SAFARI) console.log('[uzero-safari] accounts found:', accounts.length);
+    if (IS_SAFARI) {
+      accounts = await fetchAccountsViaTab();
+      console.log('[uzero-safari] accounts found:', accounts.length);
+    } else {
+      await ensureOriginRule();
+      accounts = await fetchAccounts();
+    }
   } catch (e) {
+    // Safari with no Google tab open: keep showing the last list we read instead of an error.
+    if (IS_SAFARI && e instanceof NoGoogleTabError && (await accountsItem.getValue()).length) {
+      if (status.kind !== 'ok') await statusItem.setValue(status.kind === 'loading' ? { kind: 'ok', at: Date.now() } : status);
+      return;
+    }
     if (IS_SAFARI) console.error('[uzero-safari] refresh failed', errorMessage(e));
     await statusItem.setValue({ kind: 'error', message: errorMessage(e), at: Date.now() });
     return;
@@ -323,6 +332,8 @@ const accountsTabs = new Set<number>();
 function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Browser.tabs.Tab): void {
   if (info.status === undefined && info.url === undefined) return;
   const onAccounts = hostOf(tab.url) === ACCOUNTS_HOST;
+  // Safari reads accounts through Google tabs, so a Google page finishing a load is the refresh tick.
+  if (IS_SAFARI && !onAccounts && info.status === 'complete' && isGoogleTabUrl(tab.url)) scheduleRefresh();
   if (onAccounts) {
     accountsTabs.add(tabId);
     scheduleRefresh();
