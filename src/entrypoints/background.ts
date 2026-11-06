@@ -39,6 +39,9 @@ const REORDER_PAGE = '/reorder.html' as PublicPath;
 const PANEL_PAGE = '/sidepanel.html' as PublicPath;
 // BROWSER (not FIREFOX): vitest defines env flags as strings, so "false" would be truthy there.
 const IS_FIREFOX = import.meta.env.BROWSER === 'firefox';
+const IS_SAFARI = import.meta.env.BROWSER === 'safari';
+/** Host of our own pages. Chrome: the extension id. Safari: a per-install UUID, never runtime.id. */
+const OWN_HOST = new URL(browser.runtime.getURL('/')).host;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener(onMessage);
@@ -163,10 +166,11 @@ function ensureOriginRule(): Promise<void> {
   originReady ??= browser.declarativeNetRequest
     .updateSessionRules({
       removeRuleIds: [ORIGIN_RULE_ID],
-      addRules: [originRule(browser.runtime.id, ORIGIN_RULE_ID) as unknown as DnrRule],
+      addRules: [originRule(IS_SAFARI ? OWN_HOST : browser.runtime.id, ORIGIN_RULE_ID) as unknown as DnrRule],
     })
     .catch((e) => {
       originReady = null;
+      if (IS_SAFARI) console.error('[uzero-safari] origin rule rejected', String(e));
       // Not fatal: the fetch then fails with 403 and the UI shows the error.
       console.warn('[uzero] origin rule', e);
     });
@@ -280,8 +284,11 @@ async function doRefresh(): Promise<void> {
   let accounts: Account[];
   try {
     await ensureOriginRule();
+    if (IS_SAFARI) console.log('[uzero-safari] fetching ListAccounts, own host', OWN_HOST, 'id', browser.runtime.id);
     accounts = await fetchAccounts();
+    if (IS_SAFARI) console.log('[uzero-safari] accounts found:', accounts.length);
   } catch (e) {
+    if (IS_SAFARI) console.error('[uzero-safari] refresh failed', errorMessage(e));
     await statusItem.setValue({ kind: 'error', message: errorMessage(e), at: Date.now() });
     return;
   }
