@@ -6,7 +6,7 @@ import type { Account, AppState, Envelope, Prefs, Request, ResponseMap, WizardSt
 import { fetchAccounts, indexByEmail } from '@/lib/accounts';
 import { fetchAccountsViaTab, isGoogleTabUrl, NoGoogleTabError } from '@/lib/safariAccounts';
 import {
-  LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
+  SAFARI_PIN_UNAVAILABLE, LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
 } from '@/lib/dnr';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
@@ -55,8 +55,16 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((cmd) => void onCommand(cmd));
   browser.tabs.onUpdated.addListener(onTabUpdated);
-  browser.tabs.onRemoved.addListener((tabId) => void onTabRemoved(tabId));
+  browser.tabs.onRemoved.addListener((tabId) => {
+    if (IS_SAFARI) {
+      // Only tabs previously observed in normal windows may drive a wizard or refresh.
+      if (!accountsTabs.has(tabId) && !tabUrls.has(tabId)) return;
+    }
+    void onTabRemoved(tabId);
+  });
   if (IS_FIREFOX) installFirefoxOriginFallback();
+  // Remove rules persisted by an older Safari build on every worker start, before any refresh.
+  if (IS_SAFARI) void syncRules();
 });
 
 // ---- helpers -----------------------------------------------------------------
@@ -95,7 +103,8 @@ async function getState(): Promise<AppState> {
   ]);
   // An abandoned wizard expires here too, so pin mode comes back as soon as any page looks.
   const wizard = isExpired(stored, Date.now()) ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
-  return { accounts, prefs, status, wizard };
+  return { accounts, prefs, status: IS_SAFARI && prefs.pinEnabled
+    ? { kind: 'error', message: SAFARI_PIN_UNAVAILABLE, at: Date.now() } : status, wizard };
 }
 
 function updatePrefs(fn: (prev: Prefs) => Prefs): Promise<{ prev: Prefs; next: Prefs }> {
@@ -130,13 +139,17 @@ function syncRules(): Promise<void> {
       const [prefs, accounts, wizard] = await Promise.all([
         prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
       ]);
-      const paused = isActive(wizard);
+      const paused = isActive(wizard) || IS_SAFARI;
       const rules = paused ? [] : buildRules(prefs, accounts);
       pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
       const existing = await browser.declarativeNetRequest.getDynamicRules();
+      if (IS_SAFARI) {
+        const session = await browser.declarativeNetRequest.getSessionRules();
+        if (session.length) await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: session.map((r) => r.id) });
+      }
       await browser.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: existing.map((r) => r.id),
-        addRules: rules as unknown as DnrRule[],
+        ...(IS_SAFARI ? {} : { addRules: rules as unknown as DnrRule[] }),
       });
     } catch (e) {
       console.error('[uzero] rules', e);
@@ -171,7 +184,6 @@ function ensureOriginRule(): Promise<void> {
     })
     .catch((e) => {
       originReady = null;
-      if (IS_SAFARI) console.error('[uzero-safari] origin rule rejected', String(e));
       // Not fatal: the fetch then fails with 403 and the UI shows the error.
       console.warn('[uzero] origin rule', e);
     });
@@ -212,7 +224,7 @@ async function currentPinHosts(): Promise<Map<string, number>> {
   const [prefs, accounts, wizard] = await Promise.all([
     prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
   ]);
-  pinHosts = isActive(wizard) ? new Map() : pinnedHosts(prefs, accounts);
+  pinHosts = IS_SAFARI || isActive(wizard) ? new Map() : pinnedHosts(prefs, accounts);
   return pinHosts;
 }
 
@@ -258,7 +270,7 @@ function updateLoopPauses(fn: (p: Record<string, number>) => Record<string, numb
       removeRuleIds: existing
         .map((r) => r.id)
         .filter((id) => id >= LOOP_RULE_BASE_ID && id < LOOP_RULE_BASE_ID + LOOP_MAX_HOSTS),
-      addRules: loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
+      addRules: IS_SAFARI ? [] : loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
     });
     const until = Object.values(next);
     if (until.length) await browser.alarms.create(LOOP_ALARM, { when: Math.min(...until) + 500 });
@@ -286,7 +298,6 @@ async function doRefresh(): Promise<void> {
   try {
     if (IS_SAFARI) {
       accounts = await fetchAccountsViaTab();
-      console.log('[uzero-safari] accounts found:', accounts.length);
     } else {
       await ensureOriginRule();
       accounts = await fetchAccounts();
@@ -294,10 +305,9 @@ async function doRefresh(): Promise<void> {
   } catch (e) {
     // Safari with no Google tab open: keep showing the last list we read instead of an error.
     if (IS_SAFARI && e instanceof NoGoogleTabError && (await accountsItem.getValue()).length) {
-      if (status.kind !== 'ok') await statusItem.setValue(status.kind === 'loading' ? { kind: 'ok', at: Date.now() } : status);
+      if (status.kind !== 'ok') await statusItem.setValue({ kind: 'ok', at: Date.now() });
       return;
     }
-    if (IS_SAFARI) console.error('[uzero-safari] refresh failed', errorMessage(e));
     await statusItem.setValue({ kind: 'error', message: errorMessage(e), at: Date.now() });
     return;
   }
@@ -330,6 +340,7 @@ function scheduleRefresh(ms = DEBOUNCE_MS): void {
 const accountsTabs = new Set<number>();
 
 function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Browser.tabs.Tab): void {
+  if (IS_SAFARI && tab.incognito !== false) return;
   if (info.status === undefined && info.url === undefined) return;
   const onAccounts = hostOf(tab.url) === ACCOUNTS_HOST;
   // Safari reads accounts through Google tabs, so a Google page finishing a load is the refresh tick.
@@ -371,7 +382,7 @@ async function onTabRemoved(tabId: number): Promise<void> {
 
 async function activeTab(): Promise<Browser.tabs.Tab | undefined> {
   const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-  return tab;
+  return IS_SAFARI && tab?.incognito !== false ? undefined : tab;
 }
 
 async function switchActiveTab(email: string): Promise<ResponseMap['switchActiveTab']> {
@@ -464,7 +475,7 @@ function isWizardPage(url: string | undefined, signingOut: boolean): boolean {
 async function ownGoogleTab(tabId: number | undefined, signingOut = false): Promise<Browser.tabs.Tab | undefined> {
   if (tabId === undefined) return undefined;
   const tab = await browser.tabs.get(tabId).catch(() => undefined);
-  return tab && isWizardPage(tab.url ?? tab.pendingUrl, signingOut) ? tab : undefined;
+  return tab && (!IS_SAFARI || tab.incognito === false) && isWizardPage(tab.url ?? tab.pendingUrl, signingOut) ? tab : undefined;
 }
 
 /** Point the wizard's Google tab at `url`: reuse it if it is still ours, else open a new one. */
@@ -526,7 +537,7 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
   if (pageTabId !== undefined) {
     const tab = await browser.tabs.get(pageTabId).catch(() => undefined);
     const at = tab?.url ?? tab?.pendingUrl;
-    if (tab?.id !== undefined && at?.startsWith(page)) {
+    if (tab?.id !== undefined && (!IS_SAFARI || tab.incognito === false) && at?.startsWith(page)) {
       try {
         await browser.tabs.update(tab.id, { active: true });
         await focusWindow(tab.windowId);
@@ -601,6 +612,12 @@ async function wizardFocusTab(): Promise<ResponseMap['wizardFocusTab']> {
 // ---- messages -----------------------------------------------------------------------
 
 async function handle(req: Request, sender: Browser.runtime.MessageSender): Promise<unknown> {
+  // Extension popups have no sender.tab. Check their active window before any reads or effects.
+  if (IS_SAFARI) {
+    if (sender.tab?.incognito === true) throw new Error('Uzero does not run in private windows.');
+    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.incognito === true) throw new Error('Uzero does not run in private windows.');
+  }
   switch (req.type) {
     case 'getState':
       return getState();
