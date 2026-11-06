@@ -1,0 +1,1 @@
+import{I as e}from"./nav-BOywwUPF.js";import{t}from"./App-CnP6VvZt.js";e(t,{target:document.getElementById(`app`)});
