@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { accountsItem, statusItem, prefsItem } from './store';
+import { accountsItem, statusItem, prefsItem, wizardItem } from './store';
 import { fetchAccountsViaTab, NoGoogleTabError } from './safariAccounts';
 
 const account = { email: 'a@example.com', name: 'A', photo: '', index: 1, signedOut: false };
@@ -19,6 +19,7 @@ beforeEach(async () => {
   });
   Object.assign(fakeBrowser.scripting, { executeScript: script });
   Object.assign(fakeBrowser.commands, { onCommand: { addListener: vi.fn() } });
+  vi.spyOn(fakeBrowser.tabs, 'query').mockResolvedValue([{ id: 1, incognito: false, windowId: 1 }] as any);
   const bg = (await import('../entrypoints/background')).default as unknown as { main(): void }; bg.main();
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
@@ -31,6 +32,7 @@ it('never discovers accounts in private tabs or creates a tab on refresh', async
 });
 it('keeps cached accounts and clears a previous error when no normal Google tab exists', async () => {
   await accountsItem.setValue([account]); await statusItem.setValue({ kind: 'error', message: 'old error', at: 1 });
+  vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 1, incognito: false, url: 'https://example.com/' }] as any);
   const res = await send({ type: 'refresh' });
   expect(res.data.accounts).toEqual([account]); expect(res.data.status.kind).toBe('ok');
 });
@@ -88,4 +90,64 @@ it('reads a completed normal Google tab, preferring accounts.google.com and excl
   await fetchAccountsViaTab();
   expect(script).toHaveBeenCalledTimes(1);
   expect(script).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 12 } }));
+});
+
+it('rejects empty or unknown active context and unknown sender privacy', async () => {
+  for (const tabs of [[], [{ id: 1 }]]) {
+    vi.mocked(fakeBrowser.tabs.query).mockResolvedValue(tabs as any);
+    expect((await send({ type: 'getState' })).ok).toBe(false);
+  }
+  vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 1, incognito: false }] as any);
+  expect((await send({ type: 'getState' }, { ...own, tab: { id: 2 } })).ok).toBe(false);
+});
+it('preserves account errors alongside the visible Pin blocker', async () => {
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), pinEnabled: true });
+  await statusItem.setValue({ kind: 'error', message: 'Open any Google page, then open Uzero again.', at: 1 });
+  const res = await send({ type: 'getState' });
+  expect(res.data.status.message).toContain('Open any Google page');
+  expect(res.data.status.message).toContain('Pin is unavailable in Safari');
+});
+it('pins service and reorder tab creation to a revalidated normal window', async () => {
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 20, incognito: true }, { id: 21, incognito: false, type: 'normal' }] as any);
+  vi.spyOn(fakeBrowser.windows, 'get').mockResolvedValue({ id: 21, incognito: false } as any);
+  const create = vi.spyOn(fakeBrowser.tabs, 'create');
+  await send({ type: 'openService', serviceId: 'gmail', email: account.email });
+  await send({ type: 'wizardOpen', queue: [account.email] });
+  expect(create.mock.calls.length).toBe(2);
+  for (const [arg] of create.mock.calls) expect(arg.windowId).toBe(21);
+});
+it('accounts-driven wizard advancement cannot create into the focused private window', async () => {
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue({ id: 30, incognito: false, url: 'https://example.com/', windowId: 21 } as any);
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 20, incognito: true }, { id: 21, incognito: false, type: 'normal' }] as any);
+  vi.spyOn(fakeBrowser.windows, 'get').mockResolvedValue({ id: 21, incognito: false } as any);
+  await wizardItem.setValue({ phase: 'signing-out', queue: [account.email], current: 0, completed: [], kept: [], tabId: 30, startedAt: Date.now(), lastActivityAt: Date.now() } as any);
+  vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 31, incognito: false, url: 'https://accounts.google.com/', status: 'complete' }] as any);
+  const create = vi.spyOn(fakeBrowser.tabs, 'create');
+  // Alarm-driven refresh, while the private window is focused, bypasses message entry points.
+  await fakeBrowser.alarms.onAlarm.trigger({ name: 'uzero-refresh' } as any);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ windowId: 21 }));
+});
+it('pauses wizard advancement and service creation without a verified normal window', async () => {
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 20, incognito: true }] as any);
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue({ id: 30, incognito: false, url: 'https://example.com/' } as any);
+  const wizard = { phase: 'signing-out', queue: [account.email], current: 0, completed: [], kept: [], tabId: 30, startedAt: Date.now(), lastActivityAt: Date.now() };
+  await wizardItem.setValue(wizard as any);
+  const create = vi.spyOn(fakeBrowser.tabs, 'create');
+  expect((await send({ type: 'openService', serviceId: 'gmail', email: account.email })).ok).toBe(false);
+  vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 31, incognito: false, url: 'https://accounts.google.com/', status: 'complete' }] as any);
+  await fakeBrowser.alarms.onAlarm.trigger({ name: 'uzero-refresh' } as any);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(create).not.toHaveBeenCalled();
+  expect((await wizardItem.getValue())?.phase).toBe('signing-out');
+});
+it('fails closed when a candidate window cannot be revalidated as normal', async () => {
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 21, incognito: false, type: 'normal' }] as any);
+  const get = vi.spyOn(fakeBrowser.windows, 'get');
+  const create = vi.spyOn(fakeBrowser.tabs, 'create');
+  for (const value of [undefined, { id: 21 }, { id: 21, incognito: true }]) {
+    get.mockResolvedValue(value as any);
+    expect((await send({ type: 'openService', serviceId: 'gmail', email: account.email })).ok).toBe(false);
+  }
+  expect(create).not.toHaveBeenCalled();
 });

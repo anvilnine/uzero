@@ -104,7 +104,7 @@ async function getState(): Promise<AppState> {
   // An abandoned wizard expires here too, so pin mode comes back as soon as any page looks.
   const wizard = isExpired(stored, Date.now()) ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
   return { accounts, prefs, status: IS_SAFARI && prefs.pinEnabled
-    ? { kind: 'error', message: SAFARI_PIN_UNAVAILABLE, at: Date.now() } : status, wizard };
+    ? { kind: 'error', message: status.kind === 'error' ? `${status.message} ${SAFARI_PIN_UNAVAILABLE}` : SAFARI_PIN_UNAVAILABLE, at: Date.now() } : status, wizard };
 }
 
 function updatePrefs(fn: (prev: Prefs) => Prefs): Promise<{ prev: Prefs; next: Prefs }> {
@@ -397,6 +397,22 @@ async function switchActiveTab(email: string): Promise<ResponseMap['switchActive
   return { ok: true };
 }
 
+/** Safari must never let tabs.create choose the currently focused (possibly private) window.
+ * Window privacy is immutable; revalidate existence/privacy immediately before creation. */
+async function createNormalTab(options: Parameters<typeof browser.tabs.create>[0]): Promise<Browser.tabs.Tab | undefined> {
+  if (!IS_SAFARI) return browser.tabs.create(options);
+  const windows = await browser.windows.getAll();
+  for (const candidate of windows) {
+    if (candidate.id === undefined || candidate.incognito !== false || candidate.type !== 'normal') continue;
+    const normal = await browser.windows.get(candidate.id).catch(() => undefined);
+    if (normal?.id !== candidate.id || normal.incognito !== false) continue;
+    // Explicit id: closing this window produces an error, never a fallback to the private window.
+    const tab = await browser.tabs.create({ ...options, windowId: normal.id }).catch(() => undefined);
+    if (tab) return tab;
+  }
+  return undefined;
+}
+
 async function openService(serviceId: string, email: string): Promise<ResponseMap['openService']> {
   const service = serviceById(serviceId);
   if (!service) return { ok: false };
@@ -405,7 +421,8 @@ async function openService(serviceId: string, email: string): Promise<ResponseMa
     index === undefined
       ? signInUrl(email, true, service.home) // signed out: let Google ask for this account
       : (toAccount(service.home, index) ?? service.home);
-  await browser.tabs.create({ url });
+  const created = await createNormalTab({ url });
+  if (!created) throw new Error('Open a normal Safari window to use Uzero.');
   return { ok: true };
 }
 
@@ -495,7 +512,8 @@ async function showGoogleTab(
       /* gone meanwhile: open a new one */
     }
   }
-  const created = await browser.tabs.create({ url, active: true });
+  const created = await createNormalTab({ url, active: true });
+  if (!created) return undefined;
   if (focus) await focusWindow(created.windowId);
   return created.id;
 }
@@ -516,7 +534,10 @@ async function wizardEffects(
   }
   const url = tabUrlFor(next);
   if (!url || (!stepChanged(prev, next) && !reopen)) return next;
-  return { ...next, tabId: await showGoogleTab(next.tabId, url, reopen, signingOut) };
+  const tabId = await showGoogleTab(next.tabId, url, reopen, signingOut);
+  // No verified normal window: keep the previous step pending instead of silently advancing.
+  if (IS_SAFARI && tabId === undefined) return prev;
+  return { ...next, tabId };
 }
 
 async function wizardCancel(): Promise<null> {
@@ -547,7 +568,7 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
       }
     }
   }
-  return (await browser.tabs.create({ url: page, active: true })).id;
+  return (await createNormalTab({ url: page, active: true }))?.id;
 }
 
 /**
@@ -614,9 +635,9 @@ async function wizardFocusTab(): Promise<ResponseMap['wizardFocusTab']> {
 async function handle(req: Request, sender: Browser.runtime.MessageSender): Promise<unknown> {
   // Extension popups have no sender.tab. Check their active window before any reads or effects.
   if (IS_SAFARI) {
-    if (sender.tab?.incognito === true) throw new Error('Uzero does not run in private windows.');
+    if (sender.tab && sender.tab.incognito !== false) throw new Error('Uzero does not run in private windows.');
     const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-    if (tab?.incognito === true) throw new Error('Uzero does not run in private windows.');
+    if (tab?.incognito !== false) throw new Error('Uzero does not run in private windows.');
   }
   switch (req.type) {
     case 'getState':
