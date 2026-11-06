@@ -17,7 +17,7 @@ export class NoGoogleTabError extends Error {
 /** Google tabs, accounts.google.com first: it is same-origin with ListAccounts. */
 async function googleTabs(): Promise<number[]> {
   const tabs = await browser.tabs.query({});
-  const google = tabs.filter((t) => t.id !== undefined && t.url && GOOGLE_TAB.test(t.url) && t.status === 'complete');
+  const google = tabs.filter((t) => t.incognito === false && t.id !== undefined && t.url && GOOGLE_TAB.test(t.url) && t.status === 'complete');
   google.sort((a, b) => Number(new URL(b.url!).host === 'accounts.google.com') - Number(new URL(a.url!).host === 'accounts.google.com'));
   return google.map((t) => t.id!);
 }
@@ -37,11 +37,9 @@ export async function fetchAccountsViaTab(): Promise<Account[]> {
         args: [LIST_ACCOUNTS_URL],
       });
       const out = res?.result as { status: number; body: string } | undefined;
-      console.log('[uzero-safari] in-tab ListAccounts', out?.status);
       if (out && out.status === 200) return parseListAccounts(out.body);
       lastError = new Error(`Google answered ${out?.status ?? 'nothing'}`);
     } catch (e) {
-      console.log('[uzero-safari] in-tab fetch failed', String(e));
       lastError = e;
     }
   }

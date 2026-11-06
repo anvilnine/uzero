@@ -207,3 +207,7 @@ export function recordHit(
 export function countRegexRules(rules: readonly DnrRule[]): number {
   return rules.filter((r) => r.condition.regexFilter !== undefined).length;
 }
+
+/** Safari cannot scope DNR rules to normal tabs (tabIds is unsupported). Never install
+ * global Pin rules there, even if private access is currently off: that permission can change. */
+export const SAFARI_PIN_UNAVAILABLE = 'Pin is unavailable in Safari: Safari cannot exclude private windows from link rules. Your settings are saved. Other Uzero features still work.';

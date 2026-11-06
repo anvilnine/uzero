@@ -133,7 +133,6 @@ export async function fetchAccounts(fetchFn: typeof fetch = fetch, timeoutMs = 1
     });
     if (!res.ok) throw new Error(`Google answered ${res.status}`);
     const body = await res.text();
-    if (import.meta.env.BROWSER === 'safari') console.log('[uzero-safari] ListAccounts', res.status, 'bytes', body.length, 'starts', body.slice(0, 24).replace(/[^\[\]",a-z0-9.\- ]/gi, '?'));
     return parseListAccounts(body);
   } finally {
     clearTimeout(timer);
