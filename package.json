@@ -1,15 +1,15 @@
 {
-  "name": "lineup",
+  "name": "uzero",
   "description": "Choose your default Google account and the order of your signed-in Google accounts.",
   "private": true,
   "version": "0.1.0",
   "license": "GPL-3.0-only",
-  "homepage": "https://github.com/anvilnine/lineup",
+  "homepage": "https://github.com/anvilnine/uzero",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anvilnine/lineup.git"
+    "url": "git+https://github.com/anvilnine/uzero.git"
   },
-  "bugs": "https://github.com/anvilnine/lineup/issues",
+  "bugs": "https://github.com/anvilnine/uzero/issues",
   "type": "module",
   "scripts": {
     "dev": "wxt",

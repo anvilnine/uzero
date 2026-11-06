@@ -45,7 +45,7 @@ export function sanitizeEmails(input: unknown, max = MAX_ACCOUNTS): string[] {
   return [...out];
 }
 
-/** Highest /u/N Lineup accepts from Google. Anything above is treated as a missing index. */
+/** Highest /u/N Uzero accepts from Google. Anything above is treated as a missing index. */
 export const MAX_INDEX = MAX_ACCOUNTS - 1;
 
 const isIndex = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_INDEX;

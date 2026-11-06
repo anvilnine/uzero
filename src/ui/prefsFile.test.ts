@@ -20,6 +20,11 @@ describe('parsePrefs', () => {
     expect(ok(exportPrefs(prefs))).toEqual({ ok: true, skipped: 0, prefs });
   });
 
+  it('accepts backups made before the rename (lineup-prefs)', () => {
+    const text = JSON.stringify({ kind: 'lineup-prefs', version: 1, prefs: { order: ['a@x.com'] } });
+    expect(ok(text).prefs).toEqual({ ...DEFAULT_PREFS, order: ['a@x.com'] });
+  });
+
   it('accepts bare prefs without the wrapper', () => {
     expect(ok(JSON.stringify({ order: ['A@x.com'] })).prefs).toEqual({ ...DEFAULT_PREFS, order: ['a@x.com'] });
   });
@@ -27,7 +32,7 @@ describe('parsePrefs', () => {
   it('drops and counts invalid entries, with the same rules the background uses', () => {
     const r = ok(
       JSON.stringify({
-        kind: 'lineup-prefs',
+        kind: 'uzero-prefs',
         version: 1,
         prefs: {
           order: ['B@x.com', 'b@x.com', 'not an email', 7, 'a<b>@x.com'],
@@ -61,9 +66,9 @@ describe('parsePrefs', () => {
 
   it.each([
     ['not json', 'valid JSON'],
-    ['null', 'Lineup backup'],
-    ['[]', 'Lineup backup'],
-    ['{"kind":"lineup-prefs","prefs":{"order":"a@x.com"}}', 'Lineup backup'],
+    ['null', 'Uzero backup'],
+    ['[]', 'Uzero backup'],
+    ['{"kind":"lineup-prefs","prefs":{"order":"a@x.com"}}', 'Uzero backup'],
     [`"${'x'.repeat(200_001)}"`, 'too large'],
   ])('rejects %s', (text, error) => {
     const r = parsePrefs(text);

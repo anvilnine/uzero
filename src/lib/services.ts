@@ -1,4 +1,4 @@
-// Catalog of Google services Lineup can route to an account.
+// Catalog of Google services Uzero can route to an account.
 // Host list started from authusher's sites catalog (MIT, zzjjaayy/authusher-default-google-account-extension).
 import type { ServiceInfo } from './types';
 
@@ -49,7 +49,7 @@ export const SERVICES: readonly Service[] = [
   // Media
   { id: 'youtube', name: 'YouTube', home: 'https://www.youtube.com/', hosts: ['www.youtube.com', 'm.youtube.com'], prefix: '', style: 'query', never: ['/(?:logout|signin|redirect)(?:[/?#]|$)'], caveat: 'Brand channels are picked inside YouTube, not by account number.' },
   { id: 'youtube-studio', name: 'YouTube Studio', home: 'https://studio.youtube.com/', hosts: ['studio.youtube.com'], prefix: '', style: 'query', caveat: 'Brand channels are picked inside YouTube, not by account number.' },
-  // www.google.com is here only for Maps: Lineup routes and switches nothing else on it (not Search).
+  // www.google.com is here only for Maps: Uzero routes and switches nothing else on it (not Search).
   { id: 'maps', name: 'Maps', home: 'https://www.google.com/maps', hosts: ['www.google.com'], prefix: '/maps', style: 'query', caveat: 'Only saved places and history depend on the account.' },
   // Developer and business
   { id: 'cloud', name: 'Cloud console', home: 'https://console.cloud.google.com/', hosts: ['console.cloud.google.com'], prefix: '', style: 'query' },
@@ -90,7 +90,7 @@ export const GLOBAL_NEVER_PATHS: readonly string[] = [
 export const ACCOUNT_HOSTS: readonly string[] = ['accounts.google.com', 'myaccount.google.com'];
 
 /**
- * Every host Lineup needs access to: catalog hosts, EXTRA_QUERY_HOSTS and the account pages.
+ * Every host Uzero needs access to: catalog hosts, EXTRA_QUERY_HOSTS and the account pages.
  * wxt.config.ts turns these into https-only host_permissions, so tab.url is only visible here.
  */
 export function permissionHosts(): string[] {
@@ -141,7 +141,7 @@ function pathMatches(pattern: string, pathAndQuery: string): boolean {
   return re.test(pathAndQuery);
 }
 
-/** True for URLs Lineup must never touch (sign-in flows, downloads, static hosts, ...). */
+/** True for URLs Uzero must never touch (sign-in flows, downloads, static hosts, ...). */
 export function isNeverRewrite(url: URL, service = findService(url)): boolean {
   if (isNeverHost(url.hostname)) return true;
   const path = url.pathname + url.search;

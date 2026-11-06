@@ -177,7 +177,7 @@ function presetWizard(): WizardState | null {
         current: 1,
         completed: [queue[0]!],
         tabId: 7,
-        error: 'Nothing happened for 30 minutes, so Lineup paused the reorder.',
+        error: 'Nothing happened for 30 minutes, so Uzero paused the reorder.',
       };
     case 'done': {
       // Chrome sync pinned the personal account back to the top.

@@ -58,7 +58,7 @@ describe('paint cache', () => {
 
   it('drops photos that are not on Google’s image hosts', () => {
     store.set(
-      'lineup:last-state',
+      'uzero:last-state',
       JSON.stringify({ ...state, accounts: [acct('a@x.com', 0, { photo: 'https://evil.example.com/p.png' })] }),
     );
     expect(readCache()?.accounts[0]?.photo).toBe('');
@@ -71,11 +71,11 @@ describe('paint cache', () => {
       { accounts: state.accounts, prefs: { ...state.prefs, pinEnabled: 'yes' } },
       { accounts: state.accounts, prefs: { ...state.prefs, meta: { 'a@x.com': { color: 'neon' } } } },
     ]) {
-      store.set('lineup:last-state', JSON.stringify(bad));
+      store.set('uzero:last-state', JSON.stringify(bad));
       expect(readCache()).toBeNull();
-      expect(store.has('lineup:last-state')).toBe(false);
+      expect(store.has('uzero:last-state')).toBe(false);
     }
-    store.set('lineup:last-state', '{not json');
+    store.set('uzero:last-state', '{not json');
     expect(readCache()).toBeNull();
   });
 

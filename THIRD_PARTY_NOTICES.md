@@ -1,8 +1,8 @@
 # Third-party notices
 
-Lineup is licensed under the GNU General Public License v3.0 (see LICENSE).
+Uzero is licensed under the GNU General Public License v3.0 (see LICENSE).
 
-Parts of Lineup are based on the work below. Their original licenses apply to those parts.
+Parts of Uzero are based on the work below. Their original licenses apply to those parts.
 
 ## authusher — default Google account extension
 

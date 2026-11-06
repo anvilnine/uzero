@@ -13,11 +13,11 @@ export default defineConfig({
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
     return {
-      name: 'Lineup — default account & order for Google',
-      short_name: 'Lineup',
+      name: 'Uzero — default account & order for Google',
+      short_name: 'Uzero',
       description:
         'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
-      homepage_url: 'https://github.com/anvilnine/lineup',
+      homepage_url: 'https://github.com/anvilnine/uzero',
       // Never runs in private windows, so it never sees or changes their Google sessions.
       incognito: 'not_allowed',
       permissions: [
@@ -27,7 +27,7 @@ export default defineConfig({
         // Firefox: DNR can't match our moz-extension:// initiator, so Origin is set via webRequest.
         ...(firefox ? ['webRequest', 'webRequestBlocking'] : []),
       ],
-      // Exactly the hosts Lineup routes or reads, https only (see permissionHosts in services.ts).
+      // Exactly the hosts Uzero routes or reads, https only (see permissionHosts in services.ts).
       host_permissions: permissionHosts().map((h) => `https://${h}/*`),
       // Chrome allows at most 4 suggested shortcuts.
       commands: {
@@ -39,7 +39,7 @@ export default defineConfig({
       ...(firefox && {
         browser_specific_settings: {
           gecko: {
-            id: 'lineup@anvilnine',
+            id: 'uzero@anvilnine',
             // data_collection_permissions needs Firefox 140+.
             strict_min_version: '140.0',
             data_collection_permissions: { required: ['none'] },

@@ -350,7 +350,7 @@
   <header class="top">
     <div class="brand">
       <img src="/icon/32.png" alt="" width="20" height="20" />
-      <h1>Lineup</h1>
+      <h1>Uzero</h1>
     </div>
     <div class="tools">
       <button
@@ -396,7 +396,7 @@
   {:else if rows.length === 0}
     <div class="state">
       <h2>No Google accounts found</h2>
-      <p>Sign in to Google, then open Lineup again.</p>
+      <p>Sign in to Google, then open Uzero again.</p>
       <a class="btn btn-filled" href="https://accounts.google.com/" target="_blank" rel="noreferrer">
         Sign in to Google
       </a>

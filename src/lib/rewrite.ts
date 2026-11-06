@@ -109,7 +109,7 @@ function resolve(input: string): Target | null {
   return { url, service, base: '', pathStyle: false };
 }
 
-/** Return `input` rewritten to account `index`, or null when Lineup can't route this URL. */
+/** Return `input` rewritten to account `index`, or null when Uzero can't route this URL. */
 export function toAccount(input: string, index: number): string | null {
   if (!Number.isInteger(index) || index < 0 || index > MAX_INDEX) return null;
   const t = resolve(input);

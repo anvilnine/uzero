@@ -104,7 +104,7 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
 
     case 'expire':
       if (!isExpired(state, ev.now)) return state;
-      return fail(state, 'expired', 'Nothing happened for 30 minutes, so Lineup paused the reorder.');
+      return fail(state, 'expired', 'Nothing happened for 30 minutes, so Uzero paused the reorder.');
 
     case 'touch':
       return isActive(state) ? { ...state, lastActivityAt: ev.now } : state;

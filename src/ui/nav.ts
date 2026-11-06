@@ -20,7 +20,7 @@ export interface PanelApis {
 }
 
 /**
- * Open Lineup's side panel (Chrome) or sidebar (Firefox) next to the page.
+ * Open Uzero's side panel (Chrome) or sidebar (Firefox) next to the page.
  * Both need a user gesture, so call it first thing in a click handler, before any await:
  * the browser call happens right away, and the promise only reports how it went.
  * Resolves false when the browser has neither, no window id is known yet (Chrome), or it refused.

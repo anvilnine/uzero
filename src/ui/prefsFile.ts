@@ -5,7 +5,9 @@ import { MAX_ACCOUNTS, normalizeEmail } from '../lib/accounts';
 import { SERVICE_IDS } from '../lib/services';
 import { isLabelColor, sanitizeLabel } from '../lib/labels';
 
-export const FILE_KIND = 'lineup-prefs';
+export const FILE_KIND = 'uzero-prefs';
+/** Backups made before the rename to Uzero. */
+const LEGACY_KINDS = new Set<unknown>([FILE_KIND, 'lineup-prefs']);
 
 export function exportPrefs(prefs: Prefs): string {
   return JSON.stringify({ kind: FILE_KIND, version: 1, prefs }, null, 2);
@@ -15,7 +17,7 @@ export type ImportResult = { ok: true; prefs: Prefs; skipped: number } | { ok: f
 
 /** Parse and sanitize a prefs file. Unknown or invalid entries are dropped, never trusted. */
 export function parsePrefs(text: string): ImportResult {
-  if (text.length > 200_000) return { ok: false, error: 'That file is too large to be a Lineup backup.' };
+  if (text.length > 200_000) return { ok: false, error: 'That file is too large to be a Uzero backup.' };
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -23,11 +25,11 @@ export function parsePrefs(text: string): ImportResult {
     return { ok: false, error: 'That file isn’t valid JSON.' };
   }
   const root = raw as { kind?: unknown; prefs?: unknown };
-  const p = (root && typeof root === 'object' && root.kind === FILE_KIND ? root.prefs : raw) as
+  const p = (root && typeof root === 'object' && LEGACY_KINDS.has(root.kind) ? root.prefs : raw) as
     | Record<string, unknown>
     | null;
   if (!p || typeof p !== 'object' || !Array.isArray(p.order)) {
-    return { ok: false, error: 'That file isn’t a Lineup backup.' };
+    return { ok: false, error: 'That file isn’t a Uzero backup.' };
   }
 
   let skipped = 0;

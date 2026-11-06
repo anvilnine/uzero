@@ -108,7 +108,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lineup-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `uzero-settings-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     notice = { kind: 'ok', text: 'Settings exported.' };
@@ -120,7 +120,7 @@
     input.value = '';
     if (!file) return;
     if (file.size > 200_000) {
-      notice = { kind: 'error', text: 'That file is too large to be a Lineup backup.' };
+      notice = { kind: 'error', text: 'That file is too large to be a Uzero backup.' };
       return;
     }
     const res = parsePrefs(await file.text());
@@ -148,7 +148,7 @@
 
 <header class="appbar">
   <img src="/icon/32.png" alt="" width="24" height="24" />
-  <span>Lineup</span>
+  <span>Uzero</span>
 </header>
 
 <main class="page">
@@ -164,7 +164,7 @@
     <section class="card" aria-labelledby="h-accounts">
       <div class="card-head">
         <h2 id="h-accounts">Accounts</h2>
-        <p>In your order. To reorder, use the Lineup button in your toolbar.</p>
+        <p>In your order. To reorder, use the Uzero button in your toolbar.</p>
       </div>
 
       {#if rows.length === 0}

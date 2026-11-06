@@ -102,13 +102,13 @@ describe('underSegment', () => {
 
 describe('permissionHosts', () => {
   const hosts = permissionHosts();
-  it('covers every host Lineup routes, switches or reads', () => {
+  it('covers every host Uzero routes, switches or reads', () => {
     for (const s of SERVICES) for (const h of s.hosts) expect(hosts).toContain(h);
     for (const h of EXTRA_QUERY_HOSTS) expect(hosts).toContain(h);
     expect(hosts).toContain('accounts.google.com');
     expect(hosts).toContain('myaccount.google.com');
   });
-  it('leaves out sensitive account pages Lineup has no use for', () => {
+  it('leaves out sensitive account pages Uzero has no use for', () => {
     for (const h of ['passwords.google.com', 'pay.google.com', 'takeout.google.com', 'myactivity.google.com']) {
       expect(hosts).not.toContain(h);
     }

@@ -1,4 +1,4 @@
-// Lineup background: message router, account refresh, pin-mode rules, commands, wizard tab.
+// Uzero background: message router, account refresh, pin-mode rules, commands, wizard tab.
 // Startup does no work beyond registering listeners; everything runs on events.
 import { browser, type Browser, type PublicPath } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
@@ -20,9 +20,9 @@ import {
 
 type DnrRule = Browser.declarativeNetRequest.Rule;
 
-const REFRESH_ALARM = 'lineup-refresh';
-const WIZARD_ALARM = 'lineup-wizard-expiry';
-const LOOP_ALARM = 'lineup-loop-pauses';
+const REFRESH_ALARM = 'uzero-refresh';
+const WIZARD_ALARM = 'uzero-wizard-expiry';
+const LOOP_ALARM = 'uzero-loop-pauses';
 const REFRESH_PERIOD_MIN = 15;
 const DEBOUNCE_MS = 1500;
 /** An ok status is rewritten at most this often when nothing changed (each write wakes every open page). */
@@ -135,7 +135,7 @@ function syncRules(): Promise<void> {
         addRules: rules as unknown as DnrRule[],
       });
     } catch (e) {
-      console.error('[lineup] rules', e);
+      console.error('[uzero] rules', e);
       await clearRules();
     }
   });
@@ -150,7 +150,7 @@ async function clearRules(): Promise<void> {
       await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id) });
     }
   } catch (e) {
-    console.error('[lineup] clearing rules', e);
+    console.error('[uzero] clearing rules', e);
   }
 }
 
@@ -168,7 +168,7 @@ function ensureOriginRule(): Promise<void> {
     .catch((e) => {
       originReady = null;
       // Not fatal: the fetch then fails with 403 and the UI shows the error.
-      console.warn('[lineup] origin rule', e);
+      console.warn('[uzero] origin rule', e);
     });
   return originReady;
 }
@@ -198,7 +198,7 @@ function installFirefoxOriginFallback(): void {
 let pinHosts: Map<string, number> | null = null;
 /** `${tabId} ${host}` -> recent navigation times. Memory only. */
 const loopHits = new Map<string, number[]>();
-/** Last URL seen per tab (Lineup's hosts only). Memory only. */
+/** Last URL seen per tab (Uzero's hosts only). Memory only. */
 const tabUrls = new Map<number, string>();
 const ACCOUNT_IN_URL = /[?&]authuser=|\/u\/\d/;
 
@@ -227,7 +227,7 @@ async function checkLoop(tabId: number, prev: string | undefined, url: string): 
     return;
   }
   loopHits.delete(key);
-  console.warn(`[lineup] ${host} keeps redirecting; pin is paused there for 10 minutes.`);
+  console.warn(`[uzero] ${host} keeps redirecting; pin is paused there for 10 minutes.`);
   await updateLoopPauses((p) => ({ ...p, [host]: Date.now() + LOOP_PAUSE_MS }));
 }
 
@@ -258,7 +258,7 @@ function updateLoopPauses(fn: (p: Record<string, number>) => Record<string, numb
     const until = Object.values(next);
     if (until.length) await browser.alarms.create(LOOP_ALARM, { when: Math.min(...until) + 500 });
     else await browser.alarms.clear(LOOP_ALARM);
-  }).catch((e) => console.error('[lineup] loop guard', e));
+  }).catch((e) => console.error('[uzero] loop guard', e));
 }
 
 // ---- refresh -------------------------------------------------------------------
@@ -323,7 +323,7 @@ function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Brow
     accountsTabs.delete(tabId);
     scheduleRefresh();
   }
-  // The rest needs the URL, which host permissions only expose on Lineup's own hosts.
+  // The rest needs the URL, which host permissions only expose on Uzero's own hosts.
   const prevUrl = tabUrls.get(tabId);
   if (!tab.url) {
     tabUrls.delete(tabId);
@@ -363,7 +363,7 @@ async function switchActiveTab(email: string): Promise<ResponseMap['switchActive
   const index = indexByEmail(await accountsItem.getValue()).get(email);
   if (index === undefined) return { ok: false, reason: 'That account is not signed in.' };
   const url = toAccount(tab.url, index);
-  if (!url) return { ok: false, reason: 'Lineup cannot switch this page.' };
+  if (!url) return { ok: false, reason: 'Uzero cannot switch this page.' };
   if (url !== tab.url) await browser.tabs.update(tab.id, { url });
   return { ok: true };
 }

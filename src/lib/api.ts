@@ -60,7 +60,7 @@ export function getApi(): Promise<Api> {
   if (!cached) {
     if (inExtension()) cached = Promise.resolve(real);
     else if (import.meta.env.MODE !== 'production') cached = import('./api.mock').then((m) => m.mockApi);
-    else cached = Promise.reject(new Error('Open Lineup from the browser toolbar.'));
+    else cached = Promise.reject(new Error('Open Uzero from the browser toolbar.'));
   }
   return cached;
 }

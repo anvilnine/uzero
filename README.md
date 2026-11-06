@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/icon/128.png" alt="Lineup icon" width="96" height="96">
+  <img src="public/icon/128.png" alt="Uzero icon" width="96" height="96">
 </p>
 
-<h1 align="center">Lineup</h1>
+<h1 align="center">Uzero</h1>
 
 <p align="center">
   <b>Put your Google accounts in <i>your</i> order.</b><br>
@@ -29,7 +29,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/popup-dark.png">
-    <img src="docs/screenshots/popup-light.png" alt="Lineup popup with four Google accounts in a custom order" width="300">
+    <img src="docs/screenshots/popup-light.png" alt="Uzero popup with four Google accounts in a custom order" width="300">
   </picture>
   &nbsp;&nbsp;
   <img src="docs/screenshots/panel-signing-in.png" alt="Reorder steps in the side panel, next to Google's sign-in page" width="300">
@@ -41,7 +41,7 @@
 
 Google numbers your accounts by the order you signed in. Your work account is `/u/0` today and your personal one tomorrow. Links from Slack, email and bookmarks open in whichever account is first. To fix the order, you must sign out of everything and sign back in, in the right order, by hand.
 
-**Lineup fixes that.**
+**Uzero fixes that.**
 
 ## Features
 
@@ -51,11 +51,11 @@ Google numbers your accounts by the order you signed in. Your work account is `/
 - **Reorder for real.** A guide in the side panel signs you out, then helps you sign back in, one account at a time. Google's own numbers then match your order.
 - **Password-manager friendly.** Each step shows the email to use, with a Copy button, in case your password manager fills in a different one.
 - **Light and dark.** A calm, Google-style look that follows your system theme.
-- **Light on your browser.** Lineup adds nothing to the pages you visit. It reads your account list when you open it or sign in, and every 15 minutes only while Pin is on.
+- **Light on your browser.** Uzero adds nothing to the pages you visit. It reads your account list when you open it or sign in, and every 15 minutes only while Pin is on.
 
 ## How it works
 
-Lineup gives you two ways to get the order you want. Most people only need the first one.
+Uzero gives you two ways to get the order you want. Most people only need the first one.
 
 | | **Pin mode** | **Reorder in Google** |
 |---|---|---|
@@ -68,13 +68,13 @@ Lineup gives you two ways to get the order you want. Most people only need the f
 <summary><b>Why can't an extension just reorder the accounts?</b></summary>
 <br>
 
-Google keeps the account order on its servers. Only Chrome itself can change it, with private tokens that extensions cannot get. The only public way is to sign out of all accounts and sign back in, in order. Lineup's guide makes that fast, and it never touches your passwords.
+Google keeps the account order on its servers. Only Chrome itself can change it, with private tokens that extensions cannot get. The only public way is to sign out of all accounts and sign back in, in order. Uzero's guide makes that fast, and it never touches your passwords.
 
 </details>
 
 ### Compared with other tools
 
-| | Lineup | Default-account extensions | Firefox Containers |
+| | Uzero | Default-account extensions | Firefox Containers |
 |---|:---:|:---:|:---:|
 | Open links in a chosen account | ✅ | ✅ | ➖ |
 | Default account per service | ✅ | Some | ➖ |
@@ -123,7 +123,7 @@ Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, a
 
 ## Usage
 
-1. Click the Lineup icon in your toolbar. Your signed-in accounts show up.
+1. Click the Uzero icon in your toolbar. Your signed-in accounts show up.
 2. Drag them into your order, or focus one and press <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd>.
 3. Turn on **Pin** so links open in your #1.
 4. Optional: click **Reorder in Google…** to make Google's own order match.
@@ -140,9 +140,9 @@ Change the shortcuts at `chrome://extensions/shortcuts`. On Linux, <kbd>Alt</kbd
 
 ## Privacy
 
-**Lineup runs only in your browser.** It has no servers, no analytics, no ads and no remote code. It talks only to Google, to read your own account list. It never sees your passwords.
+**Uzero runs only in your browser.** It has no servers, no analytics, no ads and no remote code. It talks only to Google, to read your own account list. It never sees your passwords.
 
-| Lineup asks for | Lineup does **not** ask for |
+| Uzero asks for | Uzero does **not** ask for |
 |---|---|
 | Access to listed Google sites only | Access to all websites |
 | Storage on your device | Your tabs list or history |
@@ -153,13 +153,13 @@ Read the full [Privacy Policy](docs/PRIVACY.md) and [Terms of Use](docs/TERMS.md
 ## FAQ
 
 <details>
-<summary><b>Why does Chrome say Lineup can "read and change your data" on Google sites?</b></summary>
+<summary><b>Why does Chrome say Uzero can "read and change your data" on Google sites?</b></summary>
 <br>
-Chrome shows that warning for any extension that can open Google links in a chosen account. Lineup only uses it to read your account list and add the account number to Google links. It never reads page content. The full list of sites is in the <a href="docs/PRIVACY.md">Privacy Policy</a>.
+Chrome shows that warning for any extension that can open Google links in a chosen account. Uzero only uses it to read your account list and add the account number to Google links. It never reads page content. The full list of sites is in the <a href="docs/PRIVACY.md">Privacy Policy</a>.
 </details>
 
 <details>
-<summary><b>Will Lineup sign me out?</b></summary>
+<summary><b>Will Uzero sign me out?</b></summary>
 <br>
 Only if you click <b>Reorder in Google</b> and confirm. Pin mode and tab switching never sign you out.
 </details>
@@ -167,7 +167,7 @@ Only if you click <b>Reorder in Google</b> and confirm. Pin mode and tab switchi
 <details>
 <summary><b>My password manager filled in the wrong email during a reorder.</b></summary>
 <br>
-Clear the email field on Google's page, then paste the email from Lineup's side panel (use the Copy button). If the wrong account already signed in, click <b>Try again</b>. Lineup signs out and starts over.
+Clear the email field on Google's page, then paste the email from Uzero's side panel (use the Copy button). If the wrong account already signed in, click <b>Try again</b>. Uzero signs out and starts over.
 </details>
 
 <details>
@@ -185,7 +185,7 @@ If Chrome itself is signed in with sync, Chrome may move its own account back to
 <details>
 <summary><b>Is it safe?</b></summary>
 <br>
-Lineup never types, fills or stores passwords, and adds no scripts to Google's sign-in pages. It uses as few permissions as it can, checks every internal message, and loads no remote code.
+Uzero never types, fills or stores passwords, and adds no scripts to Google's sign-in pages. It uses as few permissions as it can, checks every internal message, and loads no remote code.
 </details>
 
 ## Develop
@@ -211,7 +211,7 @@ src/
 
 ## Contributing
 
-Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/lineup/issues). For big changes, please open an issue first. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/uzero/issues). For big changes, please open an issue first. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
@@ -224,5 +224,5 @@ Based in part on [authusher](https://github.com/zzjjaayy/authusher-default-googl
 ---
 
 <p align="center">
-  <sub>Lineup is not affiliated with or endorsed by Google. Google and Gmail are trademarks of Google LLC.</sub>
+  <sub>Uzero is not affiliated with or endorsed by Google. Google and Gmail are trademarks of Google LLC.</sub>
 </p>

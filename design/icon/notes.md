@@ -1,4 +1,4 @@
-# Lineup icon concepts
+# Uzero icon concepts
 
 ## Concept A — Stepped order
 Three chunky pills form an unmistakable ranked list, with each lower account stepping back.

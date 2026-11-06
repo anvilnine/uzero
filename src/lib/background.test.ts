@@ -88,7 +88,7 @@ describe('background router', () => {
     const arg = dnr.updateDynamicRules.mock.calls[0]![0] as { removeRuleIds: number[]; addRules: unknown[] };
     expect(arg.removeRuleIds).toEqual([7]);
     expect(arg.addRules.length).toBeGreaterThan(10);
-    expect(await fakeBrowser.alarms.get('lineup-refresh')).toBeDefined();
+    expect(await fakeBrowser.alarms.get('uzero-refresh')).toBeDefined();
   });
 
   it('switchActiveTab rewrites the active Google tab', async () => {
@@ -250,7 +250,7 @@ describe('background router', () => {
     await send({ type: 'wizardBegin' });
     const w = await wizardItem.getValue();
     expect(w?.lastActivityAt).toBeTypeOf('number');
-    expect(await fakeBrowser.alarms.get('lineup-wizard-expiry')).toBeDefined();
+    expect(await fakeBrowser.alarms.get('uzero-wizard-expiry')).toBeDefined();
     // Pin paused while the wizard runs.
     await vi.waitFor(() => {
       const last = dnr.updateDynamicRules.mock.calls.at(-1)![0] as { addRules: unknown[] };
@@ -265,7 +265,7 @@ describe('background router', () => {
     await vi.waitFor(() => expect(dnr.updateDynamicRules).toHaveBeenCalled());
     const arg = dnr.updateDynamicRules.mock.calls.at(-1)![0] as { addRules: unknown[] };
     expect(arg.addRules.length).toBeGreaterThan(10);
-    expect(await fakeBrowser.alarms.get('lineup-wizard-expiry')).toBeUndefined();
+    expect(await fakeBrowser.alarms.get('uzero-wizard-expiry')).toBeUndefined();
   });
 
   it('pauses pin on a host that keeps bouncing a tab', async () => {
@@ -288,7 +288,7 @@ describe('background router', () => {
     const arg = dnr.updateSessionRules.mock.calls.at(-1)![0] as { addRules: { condition: { requestDomains: string[] } }[] };
     expect(arg.addRules.map((r) => r.condition.requestDomains)).toEqual([['mail.google.com']]);
     expect(Object.keys(await loopPausesItem.getValue())).toEqual(['mail.google.com']);
-    expect(await fakeBrowser.alarms.get('lineup-loop-pauses')).toBeDefined();
+    expect(await fakeBrowser.alarms.get('uzero-loop-pauses')).toBeDefined();
 
     // A tab without our marker, or a host we don't pin, never counts.
     dnr.updateSessionRules.mockClear();

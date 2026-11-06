@@ -1,6 +1,6 @@
-# Contributing to Lineup
+# Contributing to Uzero
 
-Thanks for helping. Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/lineup/issues). For big changes, open an issue first so we can agree on the approach.
+Thanks for helping. Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/uzero/issues). For big changes, open an issue first so we can agree on the approach.
 
 ## Before you send a pull request
 
@@ -8,12 +8,12 @@ Thanks for helping. Bug reports and ideas are welcome in [issues](https://github
 pnpm test && pnpm typecheck && pnpm check
 ```
 
-- Keep permissions minimal. Lineup must never add scripts to Google's sign-in pages, read passwords, or send data anywhere except Google.
+- Keep permissions minimal. Uzero must never add scripts to Google's sign-in pages, read passwords, or send data anywhere except Google.
 - Add or update tests for logic in `src/lib/`.
 
 ## License of your contribution
 
-Lineup is licensed under GPL-3.0. By sending a contribution, you agree that:
+Uzero is licensed under GPL-3.0. By sending a contribution, you agree that:
 
 1. your contribution is licensed under GPL-3.0, and
 2. you grant the maintainer (anvilnine) a perpetual, worldwide, royalty-free right to also license your contribution under other terms, including commercial licenses.

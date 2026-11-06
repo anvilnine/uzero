@@ -80,7 +80,7 @@ export function move<T>(list: T[], from: number, to: number): T[] {
 // emails, names and photos, so it is dropped as soon as no accounts are left, and anything that
 // doesn't look exactly like a state we wrote is ignored.
 
-const CACHE_KEY = 'lineup:last-state';
+const CACHE_KEY = 'uzero:last-state';
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');

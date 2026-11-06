@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <title>Lineup (flip demo)</title>
+  <title>Uzero (flip demo)</title>
   <style>
     /* Card 4 flips 0 -> # -> 1 -> 0 in ~1.2 s, then holds. Loop 4 s.
        Halves fold about the split line (card-local y=144) with scaleY,

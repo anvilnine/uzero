@@ -152,7 +152,7 @@
           heading: 'Reorder paused',
           detail: app?.prefs.pinEnabled
             ? 'Nothing happened for 30 minutes, so Pin is back on.'
-            : 'Nothing happened for 30 minutes, so Lineup paused the reorder.',
+            : 'Nothing happened for 30 minutes, so Uzero paused the reorder.',
           lede: 'Continue with this account, or skip it for now.',
           retry: 'Continue',
           tone: 'info',
@@ -402,7 +402,7 @@
         <ol class="howto">
           <li>In the Google tab, check that the email is <strong>{currentRow.email}</strong>.</li>
           <li>Type its password. Do 2-Step Verification if Google asks.</li>
-          <li>Lineup goes to the next account by itself.</li>
+          <li>Uzero goes to the next account by itself.</li>
         </ol>
         <p class="tip">
           <Icon name="key" size={18} />

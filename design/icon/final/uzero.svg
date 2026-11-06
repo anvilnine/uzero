@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <title>Lineup</title>
+  <title>Uzero</title>
   <style>
     /* The leather grain is sub-pixel below ~256 px and would alias into
        speckle, so browsers drop it at small sizes. */
