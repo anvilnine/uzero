@@ -4,7 +4,6 @@ import { browser, type Browser, type PublicPath } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import type { Account, AppState, Envelope, Prefs, Request, ResponseMap, WizardState } from '@/lib/types';
 import { fetchAccounts, indexByEmail } from '@/lib/accounts';
-import { runSafariProbe } from '@/lib/safariProbe';
 import {
   LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
@@ -285,7 +284,6 @@ async function doRefresh(): Promise<void> {
   let accounts: Account[];
   try {
     await ensureOriginRule();
-    if (IS_SAFARI) await runSafariProbe();
     if (IS_SAFARI) console.log('[uzero-safari] fetching ListAccounts, own host', OWN_HOST, 'id', browser.runtime.id);
     accounts = await fetchAccounts();
     if (IS_SAFARI) console.log('[uzero-safari] accounts found:', accounts.length);
