@@ -28,3 +28,6 @@ web-ext.config.ts
 
 # Icon exploration renders (large; kept locally)
 design/icon/round*/
+
+# Icon generator scratch (branding/ holds the finished sets)
+icon-base/

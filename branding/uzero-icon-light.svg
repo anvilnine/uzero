@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Uzero Icon (Light)</title>
+  <style>
+    /* The leather grain is sub-pixel below ~256 px and would alias into
+       speckle, so browsers drop it at small sizes. */
+    @media (max-width: 255px) { .tile-grain { display: none; } }
+  </style>
+  <defs>
+    <!-- ===== shapes ===== -->
+    <path id="tile-shape" d="M351.59,0L672.41,0C773.65,0 824.27,0 869.92,15.06L878.76,17.23C938.25,38.88 985.12,85.75 1006.77,145.24L1008.94,154.08C1024,199.73 1024,250.35 1024,351.59L1024,672.41C1024,773.65 1024,824.27 1008.94,869.92L1006.77,878.76C985.12,938.25 938.25,985.12 878.76,1006.77L869.92,1008.94C824.27,1024 773.65,1024 672.41,1024L351.59,1024C250.35,1024 199.73,1024 154.08,1008.94L145.24,1006.77C85.75,985.12 38.88,938.25 17.23,878.76L15.06,869.92C0,824.27 0,773.65 0,672.41L0,351.59C0,250.35 0,199.73 15.06,154.08L17.23,145.24C38.88,85.75 85.75,38.88 145.24,17.23L154.08,15.06C199.73,0 250.35,0 351.59,0Z"/>
+    <path id="window-shape" d="M82,374A28,28 0 0 1 110,346H914A28,28 0 0 1 942,374V644A28,28 0 0 1 914,672H110A28,28 0 0 1 82,644Z"/>
+    <clipPath id="clip-tile"><use href="#tile-shape"/></clipPath>
+    <clipPath id="clip-window"><use href="#window-shape"/></clipPath>
+
+    <!-- card-local halves (card = 202x288, split at y=144) -->
+    <path id="card-top-half" d="M0,16A16,16 0 0 1 16,0H186A16,16 0 0 1 202,16V143H0Z"/>
+    <path id="card-bottom-half" d="M0,145H202V272A16,16 0 0 1 186,288H16A16,16 0 0 1 0,272Z"/>
+    <clipPath id="clip-top"><use href="#card-top-half"/></clipPath>
+    <clipPath id="clip-bottom"><use href="#card-bottom-half"/></clipPath>
+
+    <!-- glyphs, card-local, optically centred on (101,144) -->
+    <path id="glyph-slash" d="M116.5,51H157.5L85.5,237H44.5Z"/>
+    <path id="glyph-u" d="M42,90H79V167A22,24.96 0 0 0 123,167V90H160V226H123V221.74A59,59 0 0 1 42,167Z"/>
+    <path id="glyph-0" d="M37,130.36A64,79.36 0 0 1 101,51H101A64,79.36 0 0 1 165,130.36V157.64A64,79.36 0 0 1 101,237H101A64,79.36 0 0 1 37,157.64ZM75,118.32V169.68A26,34.32 0 0 0 101,204H101A26,34.32 0 0 0 127,169.68V118.32A26,34.32 0 0 0 101,84H101A26,34.32 0 0 0 75,118.32Z"/>
+
+    <!-- ===== tile paint ===== -->
+    <linearGradient id="tile-fill" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#DA5C12"/>
+      <stop offset=".5" stop-color="#D5590F"/>
+      <stop offset="1" stop-color="#CC530B"/>
+    </linearGradient>
+    <radialGradient id="tile-sheen" cx="512" cy="40" r="560" gradientTransform="translate(0 40) scale(1 .62) translate(0 -40)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD4A8" stop-opacity=".16"/>
+      <stop offset=".5" stop-color="#FFC48E" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#FFC48E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tile-rim" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC9A0" stop-opacity=".75"/>
+      <stop offset=".08" stop-color="#FFB585" stop-opacity=".12"/>
+      <stop offset=".2" stop-color="#FFB585" stop-opacity="0"/>
+      <stop offset=".6" stop-color="#7A2600" stop-opacity="0"/>
+      <stop offset="1" stop-color="#6A1F00" stop-opacity=".55"/>
+    </linearGradient>
+    <linearGradient id="tile-edge" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD6B4" stop-opacity=".85"/>
+      <stop offset=".25" stop-color="#FFD6B4" stop-opacity="0"/>
+      <stop offset=".8" stop-color="#FFB27A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFB27A" stop-opacity=".5"/>
+    </linearGradient>
+    <filter id="soft-12" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="soft-8" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="soft-4" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="soft-2" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>
+    <!-- leather pebble grain (tile only): bump-lit noise split into a light
+         and a dark layer around the flat-light level, low alpha -->
+    <filter id="leather" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".32" numOctaves="2" seed="11" result="noise"/>
+      <feDiffuseLighting in="noise" surfaceScale="1.2" diffuseConstant="1" lighting-color="#FFFFFF" result="lit">
+        <feDistantLight azimuth="270" elevation="58"/>
+      </feDiffuseLighting>
+      <feColorMatrix in="lit" type="matrix" values="0 0 0 0 1  0 0 0 0 .86  0 0 0 0 .72  1.6 0 0 0 -1.36" result="hi"/>
+      <feColorMatrix in="lit" type="matrix" values="0 0 0 0 .36  0 0 0 0 .1  0 0 0 0 0  -1.6 0 0 0 1.36" result="lo"/>
+      <feMerge><feMergeNode in="lo"/><feMergeNode in="hi"/></feMerge>
+    </filter>
+    <!-- enamel body: soft vignette, darker toward the lower edges (no noise) -->
+    <radialGradient id="tile-body" cx="512" cy="380" r="720" gradientUnits="userSpaceOnUse">
+      <stop offset=".55" stop-color="#7A2400" stop-opacity="0"/>
+      <stop offset="1" stop-color="#7A2400" stop-opacity=".22"/>
+    </radialGradient>
+
+    <!-- ===== window paint ===== -->
+    <linearGradient id="window-fill" x1="0" y1="346" x2="0" y2="672" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5A2104"/>
+      <stop offset=".5" stop-color="#7A2E05"/>
+      <stop offset="1" stop-color="#9A3D08"/>
+    </linearGradient>
+
+    <!-- ===== card paint (card-local) ===== -->
+    <linearGradient id="paper-top" x1="0" y1="0" x2="0" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7E7C6"/>
+      <stop offset=".05" stop-color="#F0DBB3"/>
+      <stop offset=".86" stop-color="#E9D1A5"/>
+      <stop offset="1" stop-color="#DCC193"/>
+    </linearGradient>
+    <linearGradient id="paper-bottom" x1="0" y1="144" x2="0" y2="288" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8EBCF"/>
+      <stop offset=".07" stop-color="#ECD6AC"/>
+      <stop offset=".88" stop-color="#E2C99B"/>
+      <stop offset="1" stop-color="#D3B788"/>
+    </linearGradient>
+    <linearGradient id="paper-top-lit" x1="0" y1="0" x2="0" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF7E2"/>
+      <stop offset=".3" stop-color="#FBEDCD"/>
+      <stop offset=".86" stop-color="#F4E2BC"/>
+      <stop offset="1" stop-color="#E7D0A3"/>
+    </linearGradient>
+    <linearGradient id="paper-bottom-lit" x1="0" y1="144" x2="0" y2="288" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF5E0"/>
+      <stop offset=".07" stop-color="#F6E7C6"/>
+      <stop offset=".88" stop-color="#EDDAB2"/>
+      <stop offset="1" stop-color="#E0C89C"/>
+    </linearGradient>
+    <radialGradient id="lit-glow" cx="101" cy="0" r="150" gradientTransform="translate(101 0) scale(1 .7) translate(-101 0)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFBEA" stop-opacity=".95"/>
+      <stop offset=".5" stop-color="#FFF5D8" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#FFF5D8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lit-halo" cx="101" cy="-2" r="130" gradientTransform="translate(101 -2) scale(1 .22) translate(-101 2)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFEBB0" stop-opacity="1"/>
+      <stop offset=".55" stop-color="#FFC765" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#FF9A3A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#24211E"/>
+      <stop offset=".28" stop-color="#6E685F"/>
+      <stop offset=".45" stop-color="#B9B3A8"/>
+      <stop offset=".62" stop-color="#5A554D"/>
+      <stop offset="1" stop-color="#1A1816"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ================= TILE ================= -->
+  <g id="tile">
+    <use href="#tile-shape" fill="url(#tile-fill)"/>
+    <g clip-path="url(#clip-tile)">
+      <use href="#tile-shape" fill="url(#tile-body)"/>
+      <rect class="tile-grain" width="1024" height="1024" filter="url(#leather)" opacity="0.6"/>
+      <use href="#tile-shape" fill="url(#tile-sheen)"/>
+      <!-- soft pillowed inner edge -->
+      <use href="#tile-shape" fill="none" stroke="url(#tile-rim)" stroke-width="44" filter="url(#soft-12)"/>
+      <!-- crisp hairline rim -->
+      <use href="#tile-shape" fill="none" stroke="url(#tile-edge)" stroke-width="5"/>
+    </g>
+  </g>
+
+  <!-- ================= WINDOW (recess) ================= -->
+  <g id="window">
+    <!-- bevel: dark lip above, lit lip below -->
+    <use href="#window-shape" transform="translate(0 -4)" fill="#7E2C04" opacity=".55" filter="url(#soft-2)"/>
+    <use href="#window-shape" transform="translate(0 5)" fill="#FFB27A" opacity=".85" filter="url(#soft-2)"/>
+    <use href="#window-shape" fill="url(#window-fill)"/>
+    <g clip-path="url(#clip-window)">
+      <!-- lit lower inner wall -->
+      <use href="#window-shape" transform="translate(0 -6)" fill="none" stroke="#C4520F" stroke-width="10" opacity=".75" filter="url(#soft-4)"/>
+      <!-- inner shadow, heavier at the top -->
+      <use href="#window-shape" transform="translate(0 9)" fill="none" stroke="#200800" stroke-width="30" opacity=".75" filter="url(#soft-8)"/>
+    </g>
+  </g>
+
+  <!-- ================= FLAPS =================
+       Each flap is in card-local space (202x288); split line at y=144.
+       .flap-top / .flap-bottom are clipped halves (paper + glyph) so they can
+       be folded independently with scaleY about the split line. -->
+  <g id="flaps">
+  <!-- flap 1: "slash" -->
+  <g id="flap-1" class="flap" transform="translate(93 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 2: "u" -->
+  <g id="flap-2" class="flap" transform="translate(305 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-u" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-u" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 3: "slash" -->
+  <g id="flap-3" class="flap" transform="translate(517 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom)"/>
+      <use class="glyph" href="#glyph-slash" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  <!-- flap 4: "0" -->
+  <g id="flap-4" class="flap flap--chosen" transform="translate(729 368)">
+    <rect class="flap-shadow" x="-2" y="3" width="206" height="292" rx="18" fill="#1A0500" opacity=".8" filter="url(#soft-4)"/>
+    <!-- warm light spilling from the top edge: this is the chosen one -->
+    <ellipse class="flap-halo" cx="101" cy="-2" rx="120" ry="22" fill="url(#lit-halo)" opacity=".85" filter="url(#soft-4)"/>
+    <rect class="flap-gap" y="142" width="202" height="4" fill="#2B1D12"/>
+    <g class="flap-top" clip-path="url(#clip-top)">
+      <use href="#card-top-half" fill="url(#paper-top-lit)"/>
+      <rect class="flap-glow-wash" width="202" height="144" fill="url(#lit-glow)"/>
+      <use class="glyph" href="#glyph-0" fill="#2A2520"/>
+      <use href="#card-top-half" fill="none" stroke="#7A4A18" stroke-opacity=".45" stroke-width="2.5"/>
+    </g>
+    <g class="flap-bottom" clip-path="url(#clip-bottom)">
+      <use href="#card-bottom-half" fill="url(#paper-bottom-lit)"/>
+      <use class="glyph" href="#glyph-0" fill="#2A2520"/>
+      <rect y="145" width="202" height="2" fill="#FFF8E8" opacity=".55"/>
+      <use href="#card-bottom-half" fill="none" stroke="#7A4A18" stroke-opacity=".5" stroke-width="2.5"/>
+    </g>
+    <g class="flap-hinge">
+      <rect x="-5.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+      <rect x="194.5" y="123" width="13" height="42" rx="4.5" fill="url(#pin)" stroke="#120E0A" stroke-opacity=".6"/>
+    </g>
+  </g>
+  </g>
+</svg>

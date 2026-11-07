@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Uzero Icon (Theme)</title>
+  <!-- The small mark (one "0" flap on the leather plate) with flat colours
+       read from the uzero.app site tokens. Fallbacks are the brand hexes. -->
+  <defs>
+    <style>
+      :root {
+        --uz-orange: #D9541E;
+        --uz-cream: #F2E4C8;
+        --uz-ink: #231F1B;
+        --uz-shadow: #5A1E02;
+        --uz-split: #9A5A24;
+      }
+      .plate { fill: var(--orange, var(--uz-orange)); }
+      .card { fill: var(--cream, var(--uz-cream)); }
+      .card-ink { fill: var(--ink-c, var(--uz-ink)); }
+      .card-shadow { fill: var(--uz-shadow); opacity: .55; }
+      .card-split { fill: var(--uz-split); }
+    </style>
+  </defs>
+  <path id="tile" class="plate" d="M351.59,0L672.41,0C773.65,0 824.27,0 869.92,15.06L878.76,17.23C938.25,38.88 985.12,85.75 1006.77,145.24L1008.94,154.08C1024,199.73 1024,250.35 1024,351.59L1024,672.41C1024,773.65 1024,824.27 1008.94,869.92L1006.77,878.76C985.12,938.25 938.25,985.12 878.76,1006.77L869.92,1008.94C824.27,1024 773.65,1024 672.41,1024L351.59,1024C250.35,1024 199.73,1024 154.08,1008.94L145.24,1006.77C85.75,985.12 38.88,938.25 17.23,878.76L15.06,869.92C0,824.27 0,773.65 0,672.41L0,351.59C0,250.35 0,199.73 15.06,154.08L17.23,145.24C38.88,85.75 85.75,38.88 145.24,17.23L154.08,15.06C199.73,0 250.35,0 351.59,0Z"/>
+  <rect class="card-shadow" x="226" y="150" width="572" height="752" rx="90"/>
+  <rect class="card" x="232" y="140" width="560" height="744" rx="84"/>
+  <rect class="card-split" x="232" y="500" width="560" height="24"/>
+  <path class="card-ink" d="M355.2,454.64A156.8,188.16 0 0 1 512,266.48H512A156.8,188.16 0 0 1 668.8,454.64V569.36A156.8,188.16 0 0 1 512,757.52H512A156.8,188.16 0 0 1 355.2,569.36ZM461.82,419.64V604.36A50.18,62.22 0 0 0 512,666.58H512A50.18,62.22 0 0 0 562.18,604.36V419.64A50.18,62.22 0 0 0 512,357.42H512A50.18,62.22 0 0 0 461.82,419.64Z"/>
+</svg>
