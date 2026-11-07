@@ -84,7 +84,7 @@ Google keeps the account order on its servers. Only Chrome itself can change it,
 
 ### Safari development status
 
-Safari offers a separate guide window by default, or a sign-in overlay selected in options. Both reuse the same sign-out and sequential sign-in steps, including Copy. Overlay mode asks for confirmation in an extension tab before opening any Google sign-out page. The overlay appears only in the current normal `accounts.google.com` reorder tab and is removed afterwards.
+Safari offers a separate guide window by default, or a sign-in overlay selected in options. Both reuse the same sign-out and sequential sign-in steps, including Copy. On a wide desktop window, opening the guide reserves space beside Google by narrowing that browser window. Uzero restores the width when the guide closes only if you have not moved or resized the browser window. Narrow windows or unsupported resizing may leave the guide overlapping Google. Overlay mode asks for confirmation in an extension tab before opening any Google sign-out page. The overlay appears only in the current normal `accounts.google.com` reorder tab and is removed afterwards.
 
 **Safari is not release-ready.** Pin and per-service Pin overrides are blocked because Safari's redirect rules cannot safely exclude private windows. The guide window, overlay, clipboard access and iOS layout still need live Safari testing. If Safari cannot create a guide window, Uzero asks you to choose the overlay instead; it does not silently substitute a tab for a window. No account-list refresh opens a tab.
 

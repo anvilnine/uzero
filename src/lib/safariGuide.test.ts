@@ -12,6 +12,7 @@ beforeEach(async () => {
   vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue(normal as any);
   vi.spyOn(fakeBrowser.windows, 'get').mockResolvedValue({ id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 1000, height: 800 } as any);
   vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 1, incognito: false, type: 'normal' }] as any);
+  vi.spyOn(fakeBrowser.windows, 'update').mockResolvedValue({} as any);
   guide = await import('./safariGuide');
 });
 afterEach(() => vi.restoreAllMocks());
@@ -41,7 +42,7 @@ it('opens a deduplicated normal popup only on user launch, positioned beside nor
   await guide.showSafariGuide('window', confirm);
   expect(create).not.toHaveBeenCalled();
   expect(await guide.showSafariGuide('window', confirm, true)).toBe(20);
-  expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: 'popup', incognito: false, width: 360, left: 1100, top: 50 }));
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: 'popup', incognito: false, width: 360, left: 740, top: 50 }));
   vi.mocked(fakeBrowser.tabs.get).mockImplementation(async (id) => id === 20 ? { id: 20, windowId: 2, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window' } as any : normal as any);
   expect(await guide.showSafariGuide('window', confirm, true)).toBe(20);
   expect(create).toHaveBeenCalledTimes(1);
@@ -94,4 +95,31 @@ it('removes the old overlay without closing the guide window when Google moves t
   await guide.removeSafariGuide({ ...active(), pageTabId: 20 }, false);
   expect(remove).not.toHaveBeenCalled();
   expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(10, { type: 'safariGuideRemove' }, { frameId: 0 });
+});
+
+it('reserves adjacent space only on explicit launch and restores untouched source geometry', async () => {
+  const source = { id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 1000, height: 800 };
+  vi.mocked(fakeBrowser.windows.get).mockImplementation(async () => ({ ...source }) as any);
+  const update = vi.mocked(fakeBrowser.windows.update).mockImplementation(async (_id, patch) => { Object.assign(source, patch); return { ...source } as any; });
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  await guide.showSafariGuide('window', active());
+  expect(update).not.toHaveBeenCalled();
+  await guide.showSafariGuide('window', active(), true);
+  expect(update).toHaveBeenCalledWith(1, { width: 640 });
+  expect(source.width).toBe(640);
+  vi.mocked(fakeBrowser.tabs.get).mockImplementation(async id => id === 20 ? { id: 20, incognito: false, windowId: 2, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window' } as any : normal as any);
+  vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  update.mockClear();
+  await guide.showSafariGuide('window', active());
+  expect(update).not.toHaveBeenCalled();
+  await guide.removeSafariGuide({ ...active(), pageTabId: 20 });
+  expect(update).toHaveBeenCalledWith(1, { width: 1000 });
+});
+it('does not restore geometry after the user moves or resizes the source window', async () => {
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  await guide.showSafariGuide('window', active(), true);
+  vi.mocked(fakeBrowser.windows.get).mockResolvedValue({ id: 1, incognito: false, type: 'normal', left: 120, top: 50, width: 700, height: 800 } as any);
+  vi.mocked(fakeBrowser.windows.update).mockClear();
+  await guide.removeSafariGuide(active());
+  expect(fakeBrowser.windows.update).not.toHaveBeenCalled();
 });
