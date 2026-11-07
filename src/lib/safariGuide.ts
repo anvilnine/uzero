@@ -34,6 +34,18 @@ export async function authorizeSafariGuide(sender: Browser.runtime.MessageSender
 }
 
 let pageTabId: number | undefined;
+let reserved: { id: number; left: number; top: number; width: number; height: number; appliedWidth: number } | undefined;
+
+/** Restore only geometry we still own. A user move/resize takes ownership away from Uzero. */
+async function restorePlacement(): Promise<void> {
+  const old = reserved; reserved = undefined;
+  if (!old) return;
+  const win = await browser.windows.get(old.id).catch(() => undefined);
+  if (win?.incognito === false && win.type === 'normal' && win.left === old.left && win.top === old.top
+    && win.width === old.appliedWidth && win.height === old.height) {
+    await browser.windows.update(old.id, { width: old.width }).catch(() => undefined);
+  }
+}
 let tail: Promise<unknown> = Promise.resolve();
 function serial<T>(fn: () => Promise<T>): Promise<T> {
   const run = tail.then(fn, fn); tail = run.catch(() => undefined); return run;
@@ -52,21 +64,32 @@ async function removeWindow(w: WizardState | null): Promise<void> {
   const tab = await guideTab(w);
   if (tab?.id !== undefined) await browser.tabs.remove(tab.id).catch(() => undefined);
   pageTabId = undefined;
+  await restorePlacement();
 }
 export function removeSafariGuide(wizard: WizardState | null, closeWindow = true): Promise<void> {
   return serial(async () => { await removeOverlay(wizard); if (closeWindow) await removeWindow(wizard); });
 }
-async function placement(w: WizardState): Promise<{ left: number; top: number } | undefined> {
+/** Reserve side-by-side space inside the normal browser window's existing footprint. */
+async function placement(w: WizardState): Promise<{ left: number; top: number; width: number; height: number } | undefined> {
   const tab = await normalTab(w.tabId);
-  // Confirmation has no Google tab yet. A normal window is sufficient for initial placement.
   const id = tab?.windowId ?? (await browser.windows.getAll()).find(win => win.incognito === false && win.type === 'normal')?.id;
   if (id === undefined) return undefined;
   const win = await browser.windows.get(id).catch(() => undefined);
-  if (win?.incognito !== false || win.type !== 'normal' || win.left === undefined || win.top === undefined || win.width === undefined) return undefined;
-  return { left: win.left + win.width, top: win.top };
+  if (win?.incognito !== false || win.type !== 'normal' || win.left === undefined || win.top === undefined
+    || win.width === undefined || win.height === undefined || win.width <= 0 || win.height <= 0) return undefined;
+  const width = Math.min(360, win.width);
+  const bounds = { left: win.left + win.width - width, top: win.top, width, height: Math.min(640, win.height) };
+  // Keep at least 600px for Google's page. Narrow windows retain their geometry; guide may overlap.
+  if (win.width >= 960) {
+    try {
+      await browser.windows.update(id, { width: win.width - width });
+      reserved = { id, left: win.left, top: win.top, width: win.width, height: win.height, appliedWidth: win.width - width };
+    } catch { /* Placement remains bounded; unsupported resizing is a live parity limitation. */ }
+  }
+  return bounds;
 }
 
-/** Only explicit user entry creates a window. Background ticks may position it or inject an authorized overlay. */
+/** Only explicit user entry creates a window. Background ticks never move windows; they may inject an authorized overlay. */
 export function showSafariGuide(mode: SafariGuideMode, wizard: WizardState | null, userTriggered = false): Promise<number | undefined> {
   return serial(async () => {
     if (!wizard) return undefined;
@@ -81,21 +104,26 @@ export function showSafariGuide(mode: SafariGuideMode, wizard: WizardState | nul
     }
     await removeOverlay(wizard);
     const tab = await guideTab(wizard);
-    const bounds = await placement(wizard).catch(() => undefined);
     if (tab?.id !== undefined) {
-      if (bounds || userTriggered) await browser.windows.update(tab.windowId, { ...bounds, ...(userTriggered ? { focused: true } : {}) }).catch(() => undefined);
+      if (userTriggered) await browser.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
       return tab.id;
     }
     if (!userTriggered) return undefined;
+    await restorePlacement();
+    const bounds = await placement(wizard).catch(() => undefined);
     let win: Browser.windows.Window | undefined;
     const options = { url: windowUrl(), type: 'popup' as const, incognito: false, width: 360, height: 640, focused: true };
     try { win = await browser.windows.create({ ...options, ...bounds }); }
     catch {
       // Some Safari versions cannot place windows. Retry without coordinates, still a real popup.
+      await restorePlacement();
       if (bounds) win = await browser.windows.create(options).catch(() => undefined);
     }
     const created = win?.tabs?.[0];
-    if (win?.incognito !== false || created?.id === undefined) throw new Error(WINDOW_UNAVAILABLE);
+    if (win?.incognito !== false || created?.id === undefined) {
+      await restorePlacement();
+      throw new Error(WINDOW_UNAVAILABLE);
+    }
     pageTabId = created.id;
     return pageTabId;
   });
