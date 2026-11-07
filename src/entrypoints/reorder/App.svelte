@@ -9,7 +9,8 @@
   import { closePanel, closeView, errorText } from '../../ui/nav';
 
   /** Narrow layout for the browser's side panel, next to Google's sign-in page. */
-  let { panel = false }: { panel?: boolean } = $props();
+  let { panel = false, embedded = false, guideWindow = false }: { panel?: boolean; embedded?: boolean; guideWindow?: boolean } = $props();
+  const safari = import.meta.env.BROWSER === 'safari';
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
@@ -112,12 +113,18 @@
     }
   }
 
-  const close = () => (panel ? closePanel() : closeView());
+  const close = () => {
+    // Embedded close is a wizard cancellation. Never close the user's Google tab via window.close().
+    if (embedded) void act('wizardCancel');
+    else if (guideWindow) closeView();
+    else if (panel) closePanel();
+    else closeView();
+  };
 
   // Nothing was signed out yet: drop the reorder and put the panel away (a tab shows neutral copy).
   function notNow() {
     void act('wizardCancel');
-    if (panel) close();
+    if (panel && !embedded) close();
   }
 
   async function goToGoogleTab() {
@@ -150,7 +157,7 @@
       case 'expired':
         return {
           heading: 'Reorder paused',
-          detail: app?.prefs.pinEnabled
+          detail: !safari && app?.prefs.pinEnabled
             ? 'Nothing happened for 30 minutes, so Pin is back on.'
             : 'Nothing happened for 30 minutes, so Uzero paused the reorder.',
           lede: 'Continue with this account, or skip it for now.',
@@ -249,7 +256,7 @@
     'Every Google account signs out, in every tab. Save any open work in Google first.',
     'Have each password and 2-Step Verification code ready.',
     'Password managers (like LastPass) can fill in a different email. Check the email on Google’s page before you type a password.',
-    'If Chrome itself is signed in with sync, Chrome may put that account back first. Pin still works.',
+    ...(safari ? [] : ['If Chrome itself is signed in with sync, Chrome may put that account back first. Pin still works.']),
   ];
 </script>
 
@@ -261,6 +268,7 @@
 {/snippet}
 
 <div class="page" class:panel>
+  {#if embedded}<p class="embedded-label">Uzero guide · Google handles your sign-in</p>{/if}
   <main class="card">
     {#if w && w.phase !== 'confirm'}
       <div
@@ -437,7 +445,7 @@
           {firstOff === 0
             ? `Google put ${googleNow[0]?.email ?? 'another account'} first. Chrome sync can do this.`
             : 'Some accounts aren’t where you put them.'}
-          {app.prefs.pinEnabled
+          {safari ? 'Pin is unavailable in Safari until private-window isolation can be guaranteed.' : app.prefs.pinEnabled
             ? 'Pin is on, so links still open as your default.'
             : 'Turn on Pin so links open as your default anyway.'}
         {/if}
@@ -470,7 +478,7 @@
       </ol>
 
       <div class="actions">
-        {#if targets.length > 0 && !matches && !app.prefs.pinEnabled}
+        {#if !safari && targets.length > 0 && !matches && !app.prefs.pinEnabled}
           <button type="button" class="btn btn-text" onclick={close}>Close</button>
           <button type="button" class="btn btn-filled" onclick={turnOnPin}>Turn on Pin</button>
         {:else}
@@ -510,6 +518,7 @@
 </div>
 
 <style>
+  .embedded-label { margin: 0; padding: 8px 16px; font-size: var(--t-sm); color: var(--on-surface-variant); border-bottom: 1px solid var(--outline-variant); }
   :global(body) {
     background: var(--surface-container);
   }

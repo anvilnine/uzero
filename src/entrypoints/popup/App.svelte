@@ -186,7 +186,7 @@
     if (!api || !app) return;
     // The steps sit next to Google's sign-in page in the side panel, when the browser has one.
     // Opened before any await (it needs this click); if it fails, the reorder tab opens instead.
-    const opening = openSidePanel(windowId);
+    const opening = import.meta.env.BROWSER === 'safari' ? Promise.resolve(false) : openSidePanel(windowId);
     try {
       // While a reorder runs, the background keeps it and just brings its page back.
       const queue = reorder?.queue ?? rows.filter((r) => !r.inactive).map((r) => r.email);
@@ -567,7 +567,7 @@
 <style>
   :global(html),
   :global(body) {
-    width: 360px;
+    width: min(360px, 100vw);
   }
   :global(body) {
     overflow: hidden;
@@ -578,8 +578,9 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 360px;
-    max-height: 560px;
+    width: 100%;
+    max-width: 360px;
+    max-height: min(560px, 100dvh);
     min-height: 240px;
     padding-bottom: 8px;
     background: var(--surface-container);
