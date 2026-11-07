@@ -63,6 +63,7 @@ const PREFS: Prefs = {
   pinEnabled: true,
   serviceDefaults: { youtube: 'me@zonilyjame.dev', photos: 'me@zonilyjame.dev' },
   disabledServices: ['maps'],
+  safariGuideMode: 'window',
 };
 
 const SERVICES: ServiceInfo[] = [

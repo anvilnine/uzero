@@ -282,6 +282,27 @@
       </table>
     </section>
 
+    {#if import.meta.env.BROWSER === 'safari'}
+      <section class="card" aria-labelledby="h-guide">
+        <div class="card-head">
+          <h2 id="h-guide">Reorder guide</h2>
+          <p>Choose where Safari shows the steps while you sign in to Google.</p>
+        </div>
+        <div class="pad">
+          <label>
+            Guide location
+            <select
+              value={app.prefs.safariGuideMode}
+              onchange={(e) => void save({ safariGuideMode: e.currentTarget.value === 'overlay' ? 'overlay' : 'window' })}
+            >
+              <option value="window">Guide window</option>
+              <option value="overlay">Sign-in overlay</option>
+            </select>
+          </label>
+        </div>
+      </section>
+    {/if}
+
     <section class="card" aria-labelledby="h-backup">
       <div class="card-head">
         <h2 id="h-backup">Backup</h2>
