@@ -107,7 +107,8 @@ it('preserves account errors alongside the visible Pin blocker', async () => {
   expect(res.data.status.message).toContain('Open any Google page');
   expect(res.data.status.message).toContain('Pin is unavailable in Safari');
 });
-it('pins service and reorder tab creation to a revalidated normal window', async () => {
+it('pins service and overlay confirmation tab creation to a revalidated normal window', async () => {
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), safariGuideMode: 'overlay' });
   vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 20, incognito: true }, { id: 21, incognito: false, type: 'normal' }] as any);
   vi.spyOn(fakeBrowser.windows, 'get').mockResolvedValue({ id: 21, incognito: false } as any);
   const create = vi.spyOn(fakeBrowser.tabs, 'create');
@@ -150,4 +151,47 @@ it('fails closed when a candidate window cannot be revalidated as normal', async
     expect((await send({ type: 'openService', serviceId: 'gmail', email: account.email })).ok).toBe(false);
   }
   expect(create).not.toHaveBeenCalled();
+});
+
+it('opens a user-triggered Safari guide window at confirmation without signing out', async () => {
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 22, incognito: false, tabs: [{ id: 23 }] } as any);
+  const create = vi.spyOn(fakeBrowser.tabs, 'create');
+  const result = await send({ type: 'wizardOpen', queue: [account.email] });
+  expect(result).toMatchObject({ ok: true, data: { phase: 'confirm', pageTabId: 23 } });
+  expect(fakeBrowser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ type: 'popup', incognito: false }));
+  expect(create).not.toHaveBeenCalled();
+});
+it('overlay authorization reveals only a boolean and does not trust ordinary content messages', async () => {
+  const tab = { id: 10, incognito: false, url: 'https://accounts.google.com/signin', windowId: 1 };
+  const sender = { ...own, url: tab.url, tab, frameId: 0 };
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue(tab as any);
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), safariGuideMode: 'overlay' });
+  await wizardItem.setValue({ phase: 'signing-in', queue: [account.email], current: 0, completed: [], tabId: 10, startedAt: Date.now() });
+  expect(await send({ type: 'safariGuideAuthorize' }, sender)).toEqual({ ok: true, data: { authorized: true } });
+  for (const type of ['getState', 'wizardBegin', 'wizardCancel']) expect((await send({ type }, sender)).ok).toBe(false);
+  expect(await send({ type: 'safariGuideAuthorize' }, { ...sender, tab: { ...tab, id: 11 } })).toEqual({ ok: true, data: { authorized: false } });
+});
+it('gates extension iframe state/actions by current overlay tab and limits its API', async () => {
+  const tab = { id: 10, incognito: false, url: 'https://accounts.google.com/signin', windowId: 1 };
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue(tab as any);
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), safariGuideMode: 'overlay' });
+  await wizardItem.setValue({ phase: 'signing-in', queue: [account.email], current: 0, completed: [], tabId: 10, startedAt: Date.now() });
+  const frame = { ...own, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=overlay', frameId: 2, tab };
+  expect((await send({ type: 'getState' }, frame)).ok).toBe(true);
+  for (const sender of [{ ...frame, frameId: undefined }, { ...frame, frameId: 0 }, { ...frame, tab: { ...tab, id: 11 } }, { ...frame, tab: { ...tab, incognito: true } }, { ...frame, url: fakeBrowser.runtime.getURL('/reorder.html') }]) {
+    for (const type of ['getState', 'wizardCancel']) expect((await send({ type }, sender)).ok).toBe(false);
+  }
+  expect((await send({ type: 'savePrefs', patch: { pinEnabled: true } }, frame)).ok).toBe(false);
+  expect((await send({ type: 'openService', serviceId: 'gmail', email: account.email }, frame)).ok).toBe(false);
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), safariGuideMode: 'window' });
+  expect((await send({ type: 'getState' }, frame)).ok).toBe(false);
+});
+it('removes an overlay on cancel and clears wizard state', async () => {
+  const tab = { id: 10, incognito: false, url: 'https://accounts.google.com/signin', windowId: 1 };
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue(tab as any);
+  const remove = vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue(undefined);
+  await wizardItem.setValue({ phase: 'signing-in', queue: [account.email], current: 0, completed: [], tabId: 10, startedAt: Date.now() });
+  await send({ type: 'wizardCancel' });
+  expect(remove).toHaveBeenCalledWith(10, { type: 'safariGuideRemove' }, { frameId: 0 });
+  expect(await wizardItem.getValue()).toBeNull();
 });

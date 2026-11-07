@@ -9,6 +9,7 @@ import {
   SAFARI_PIN_UNAVAILABLE, LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
 } from '@/lib/dnr';
+import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, showSafariGuide } from '@/lib/safariGuide';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
 import { currentEmail, switchableServiceId, toAccount } from '@/lib/rewrite';
 import { ACCOUNT_HOSTS, SERVICES, serviceById, toServiceInfo } from '@/lib/services';
@@ -365,6 +366,7 @@ function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Brow
     void wizardItem.getValue().then((w) => {
       if (!w || !isActive(w) || w.tabId !== tabId) return;
       void wizardStep({ type: 'touch', now: Date.now() });
+      if (IS_SAFARI && onAccounts) void syncSafariGuide(w, w);
       if (!onAccounts) scheduleRefresh(); // e.g. myaccount after sign-in
     });
   }
@@ -459,6 +461,7 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     if (next && isActive(next)) next = { ...next, lastActivityAt: now };
     next = await wizardEffects(prev, next, !!opts.reopen);
     await wizardItem.setValue(next);
+    if (IS_SAFARI) await syncSafariGuide(prev, next);
     if (isActive(prev) !== isActive(next)) void syncRules();
     if (isActive(next)) {
       await browser.alarms.create(WIZARD_ALARM, { when: lastActivity(next!) + WIZARD_TTL_MS + 1000 });
@@ -467,6 +470,20 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     }
     return next;
   });
+}
+
+/** Presentation failures are visible, but never roll back an already completed Google step. */
+async function syncSafariGuide(prev: WizardState | null, next: WizardState | null): Promise<void> {
+  try {
+    if (!next || (next.phase !== 'confirm' && !guideRunning(next))) {
+      await removeSafariGuide(prev);
+      return;
+    }
+    if (prev?.tabId !== undefined && prev.tabId !== next.tabId) await removeSafariGuide(prev, false);
+    await showSafariGuide((await prefsItem.getValue()).safariGuideMode, next);
+  } catch (e) {
+    await statusItem.setValue({ kind: 'error', message: `Safari guide: ${errorMessage(e)}. Reopen the reorder from Uzero.`, at: Date.now() });
+  }
 }
 
 async function focusWindow(windowId: number | undefined): Promise<void> {
@@ -543,6 +560,7 @@ async function wizardEffects(
 async function wizardCancel(): Promise<null> {
   await wizardLock(async () => {
     const w = await wizardItem.getValue();
+    if (IS_SAFARI) await removeSafariGuide(w);
     const own = await ownGoogleTab(w?.tabId, w?.phase === 'signing-out');
     if (own?.id !== undefined) await browser.tabs.remove(own.id).catch(() => undefined);
     await wizardItem.setValue(null);
@@ -579,7 +597,21 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
 async function wizardOpen(queue: string[], fromPage: number | undefined, panel = false): Promise<WizardState> {
   let state = (await wizardStep({ type: 'open', queue, now: Date.now() }))!;
   if (isActive(state)) state = (await wizardStep({ type: 'touch', now: Date.now() }))!;
-  if (panel) return state;
+  if (IS_SAFARI) {
+    const mode = (await prefsItem.getValue()).safariGuideMode;
+    if (mode === 'window') {
+      const id = await showSafariGuide(mode, state, true);
+      if (id !== undefined) state = (await wizardStep({ type: 'pageOpened', tabId: id }))!;
+      return state;
+    }
+    if (guideRunning(state)) {
+      await showSafariGuide(mode, state, true);
+      await wizardFocusTab();
+      return state;
+    }
+    // Overlay selection still confirms in an extension page, without opening any Google URL.
+  }
+  if (panel && !IS_SAFARI) return state;
   const pageTabId = fromPage ?? (await showReorderPage(state.pageTabId));
   if (pageTabId !== undefined && pageTabId !== state.pageTabId) {
     state = (await wizardStep({ type: 'pageOpened', tabId: pageTabId }))!;
@@ -633,6 +665,13 @@ async function wizardFocusTab(): Promise<ResponseMap['wizardFocusTab']> {
 // ---- messages -----------------------------------------------------------------------
 
 async function handle(req: Request, sender: Browser.runtime.MessageSender): Promise<unknown> {
+  // A web-accessible iframe has extension origin, but only the active guide may use its narrow API.
+  const webParent = IS_SAFARI && sender.tab && !sender.tab.url?.startsWith(browser.runtime.getURL('/'));
+  if (webParent || (sender.frameId !== undefined && sender.frameId > 0)) {
+    const allowed = new Set(['getState', 'refresh', 'wizardSkip', 'wizardRetry', 'wizardContinue', 'wizardReopen', 'wizardFocusTab', 'wizardCancel']);
+    const [prefs, wizard] = await Promise.all([prefsItem.getValue(), wizardItem.getValue()]);
+    if (!IS_SAFARI || !allowed.has(req.type) || !await authorizeSafariGuide(sender, prefs.safariGuideMode, wizard)) throw new Error('Forbidden guide frame');
+  }
   // Extension popups have no sender.tab. Check their active window before any reads or effects.
   if (IS_SAFARI) {
     if (sender.tab && sender.tab.incognito !== false) throw new Error('Uzero does not run in private windows.');
@@ -650,6 +689,18 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       if (!sameJson(prev, next)) {
         await syncRules();
         if (prev.pinEnabled !== next.pinEnabled) await syncAlarm(next.pinEnabled);
+        if (IS_SAFARI && prev.safariGuideMode !== next.safariGuideMode) {
+          const w = await wizardItem.getValue();
+          await removeSafariGuide(w);
+          if (w && (w.phase === 'confirm' || guideRunning(w))) {
+            const id = await showSafariGuide(next.safariGuideMode, w, true);
+            if (id !== undefined) await wizardStep({ type: 'pageOpened', tabId: id });
+            else if (w.phase === 'confirm') {
+              const confirmation = await showReorderPage(undefined);
+              if (confirmation !== undefined) await wizardStep({ type: 'pageOpened', tabId: confirmation });
+            }
+          }
+        }
       }
       return next;
     }
@@ -688,6 +739,12 @@ function onMessage(
   sender: Browser.runtime.MessageSender,
   sendResponse: (res: Envelope<unknown>) => void,
 ): true | undefined {
+  if (IS_SAFARI && msg && typeof msg === 'object' && (msg as { type?: unknown }).type === GUIDE_AUTHORIZE) {
+    Promise.all([prefsItem.getValue(), wizardItem.getValue()])
+      .then(async ([prefs, wizard]) => ({ authorized: await authorizeSafariGuide(sender, prefs.safariGuideMode, wizard) }))
+      .then(data => sendResponse({ ok: true, data }), () => sendResponse({ ok: true, data: { authorized: false } }));
+    return true;
+  }
   if (!isTrustedSender(sender, browser.runtime.id, browser.runtime.getURL('/'))) {
     sendResponse({ ok: false, error: 'Forbidden sender' });
     return undefined;

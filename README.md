@@ -48,10 +48,10 @@ Google numbers your accounts by the order you signed in. Your work account is `/
 - **Your order.** Drag accounts into the order you want. Give each one a label and a color.
 - **Pin your #1.** Google links from outside Google (chat apps, bookmarks, the address bar) open in your #1 account. Or pick an account per service, for example Calendar in your work account.
 - **Switch this tab.** Move the current Gmail, Drive, Docs or Calendar tab to another account in one click, or with <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>4</kbd>.
-- **Reorder for real.** A guide in the side panel signs you out, then helps you sign back in, one account at a time. Google's own numbers then match your order.
+- **Reorder for real.** A guide signs you out, then helps you sign back in, one account at a time. Google's own numbers then match your order.
 - **Password-manager friendly.** Each step shows the email to use, with a Copy button, in case your password manager fills in a different one.
 - **Light and dark.** A calm, Google-style look that follows your system theme.
-- **Light on your browser.** Uzero adds nothing to the pages you visit. It reads your account list when you open it or sign in, and every 15 minutes only while Pin is on.
+- **Light on your browser.** Chrome, Edge and Firefox add nothing to the pages you visit. Safari uses an existing normal Google tab to read accounts and offers an optional sign-in overlay during a reorder. It reads your account list when you open it or sign in, and every 15 minutes only while Pin is on.
 
 ## How it works
 
@@ -81,6 +81,12 @@ Google keeps the account order on its servers. Only Chrome itself can change it,
 | Switch the current tab | ✅ | Some | ➖ |
 | Real reorder of `/u/0`, `/u/1`… | ✅ | ❌ | ❌ |
 | Chrome and Firefox | ✅ | Some | Firefox only |
+
+### Safari development status
+
+Safari offers a separate guide window by default, or a sign-in overlay selected in options. Both reuse the same sign-out and sequential sign-in steps, including Copy. Overlay mode asks for confirmation in an extension tab before opening any Google sign-out page. The overlay appears only in the current normal `accounts.google.com` reorder tab and is removed afterwards.
+
+**Safari is not release-ready.** Pin and per-service Pin overrides are blocked because Safari's redirect rules cannot safely exclude private windows. The guide window, overlay, clipboard access and iOS layout still need live Safari testing. If Safari cannot create a guide window, Uzero asks you to choose the overlay instead; it does not silently substitute a tab for a window. No account-list refresh opens a tab.
 
 ## Install
 
@@ -133,7 +139,7 @@ Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, a
 
 | Shortcut | Action |
 |---|---|
-| <kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>4</kbd> | Switch this tab to account 1–4 in your order |
+| <kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>4</kbd> | Switch this tab to account 1-4 in your order |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | Move the focused account up or down |
 
 Change the shortcuts at `chrome://extensions/shortcuts`. On Linux, <kbd>Alt</kbd>+number already switches browser tabs, so pick other keys there.
@@ -145,7 +151,7 @@ Change the shortcuts at `chrome://extensions/shortcuts`. On Linux, <kbd>Alt</kbd
 | Uzero asks for | Uzero does **not** ask for |
 |---|---|
 | Access to listed Google sites only | Access to all websites |
-| Storage on your device | Your tabs list or history |
+| Storage on your device; tab access in Safari to find normal Google tabs | Your browsing history |
 | Link rules for Pin mode | Cookies or downloads |
 
 Read the full [Privacy Policy](docs/PRIVACY.md) and [Terms of Use](docs/TERMS.md).
@@ -155,7 +161,7 @@ Read the full [Privacy Policy](docs/PRIVACY.md) and [Terms of Use](docs/TERMS.md
 <details>
 <summary><b>Why does Chrome say Uzero can "read and change your data" on Google sites?</b></summary>
 <br>
-Chrome shows that warning for any extension that can open Google links in a chosen account. Uzero only uses it to read your account list and add the account number to Google links. It never reads page content. The full list of sites is in the <a href="docs/PRIVACY.md">Privacy Policy</a>.
+Chrome shows that warning for any extension that can open Google links in a chosen account. Uzero only uses it to read your account list and add the account number to Google links. It never reads your email, files or sign-in form fields. The full list of sites is in the <a href="docs/PRIVACY.md">Privacy Policy</a>.
 </details>
 
 <details>
@@ -185,7 +191,7 @@ If Chrome itself is signed in with sync, Chrome may move its own account back to
 <details>
 <summary><b>Is it safe?</b></summary>
 <br>
-Uzero never types, fills or stores passwords, and adds no scripts to Google's sign-in pages. It uses as few permissions as it can, checks every internal message, and loads no remote code.
+Uzero never types, fills, reads or stores passwords. Chrome, Edge and Firefox add no scripts to Google's sign-in pages. Safari uses scripts for account-list requests through normal Google tabs and for its optional reorder overlay, without reading sign-in fields. It uses as few permissions as it can, checks every internal message, and loads no remote code.
 </details>
 
 ## Develop
@@ -197,6 +203,7 @@ Built with [WXT](https://wxt.dev), [Svelte 5](https://svelte.dev) and TypeScript
 | Dev mode with live reload | `pnpm dev` |
 | Chrome build | `pnpm build` → `.output/chrome-mv3` |
 | Firefox build | `pnpm build:firefox` → `.output/firefox-mv3` |
+| Safari web build (no signing) | `pnpm exec wxt build -b safari --mv3` → `.output/safari-mv3` |
 | Design preview with fake data | `pnpm build:preview` |
 | Store zips | `pnpm zip` / `pnpm zip:firefox` |
 | Tests | `pnpm test` |

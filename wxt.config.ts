@@ -9,6 +9,8 @@ const switchCommand = (n: number) => ({
 // See https://wxt.dev/api/reference/wxt/interfaces/inlineconfig.html
 export default defineConfig({
   srcDir: 'src',
+  // Safari overlay resources need MV3 host-scoped web_accessible_resources.
+  manifestVersion: 3,
   modules: ['@wxt-dev/module-svelte'],
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
@@ -28,6 +30,12 @@ export default defineConfig({
         ...(firefox ? ['webRequest', 'webRequestBlocking'] : []),
         ...(browser === 'safari' ? ['scripting', 'tabs'] : []),
       ],
+      ...(browser === 'safari' && {
+        web_accessible_resources: [{
+          resources: ['reorder.html', 'chunks/*', 'assets/*', 'icon/32.png'],
+          matches: ['https://accounts.google.com/*'],
+        }],
+      }),
       // Exactly the hosts Uzero routes or reads, https only (see permissionHosts in services.ts).
       host_permissions: permissionHosts().map((h) => `https://${h}/*`),
       // Chrome allows at most 4 suggested shortcuts.
