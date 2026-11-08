@@ -8,6 +8,9 @@
   import { COLOR_NAMES, LABEL_COLORS, LABEL_MAX, cleanLabel, lineup, toneOf } from '../../ui/model';
   import { errorText } from '../../ui/nav';
   import { exportPrefs, parsePrefs } from '../../ui/prefsFile';
+  import { FEATURE_REQUEST_URL, formLink, pageContext } from '../../lib/feedback';
+
+  const featureUrl = formLink(FEATURE_REQUEST_URL, pageContext('options'));
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
@@ -306,6 +309,18 @@
         <p class="notice" class:error={notice.kind === 'error'} role="status">{notice.text}</p>
       {/if}
     </section>
+
+    {#if featureUrl}
+      <section class="card" aria-labelledby="h-ideas">
+        <div class="card-head">
+          <h2 id="h-ideas">Ideas</h2>
+          <p>Missing something? Tell us what would make Uzero better for you.</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-outlined" href={featureUrl} target="_blank" rel="noreferrer">Request a feature</a>
+        </div>
+      </section>
+    {/if}
 
     <section class="card how" aria-labelledby="h-how">
       <div class="card-head">
