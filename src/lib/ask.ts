@@ -3,15 +3,23 @@
 // never sent anywhere; opening a link is the only thing that leaves the browser, and only when
 // the user clicks it.
 
-/** Store review pages. Leave a value empty until that listing is live: its button stays hidden. */
+/**
+ * Store review pages, through short links on uzero.app. The real targets live in the site's
+ * public/_redirects, so they can change without an extension update.
+ * TODO: until the listings are live these land on the uzero.app home page.
+ * An empty value hides the button.
+ */
 export const REVIEW_URLS: Record<Store, string> = {
-  chrome: '',
-  edge: '',
-  firefox: '',
+  chrome: 'https://uzero.app/review/chrome',
+  edge: 'https://uzero.app/review/edge',
+  firefox: 'https://uzero.app/review/firefox',
 };
 
-/** Uzero feedback form on forms.zonily.cloud. Empty until the form exists: the button stays hidden. */
-export const FEEDBACK_URL = '';
+/**
+ * Feedback form, through a short link on uzero.app (see the site's public/_redirects).
+ * TODO: lands on uzero.app/support/ until the forms.zonily.cloud form exists.
+ */
+export const FEEDBACK_URL = 'https://uzero.app/feedback';
 
 export const SITE_URL = 'https://uzero.app/';
 export const SHARE_TEXT = 'Uzero puts my Google accounts in my order. No more opening links in the wrong account.';
