@@ -1,1 +1,0 @@
-import{N as e}from"./nav-By_IYMwn.js";import{t}from"./App-CHUrgpgr.js";e(t,{target:document.getElementById(`app`),props:{panel:!0}});
