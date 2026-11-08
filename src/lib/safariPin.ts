@@ -15,3 +15,10 @@ export async function safariPinError(extension: { isAllowedIncognitoAccess?: () 
     return `Pin is paused: Uzero cannot verify that Allow in Private Browsing is off. ${RECOVERY} If this persists, keep Pin off.`;
   }
 }
+
+/** A saved preference is not proof that the corresponding rule update succeeded. */
+export function safariPinFeedback(on: boolean, pinError: string | null | undefined, verified: boolean): string {
+  if (!verified || pinError === undefined) return 'Pin needs attention. Reopen Uzero or refresh.';
+  if (pinError) return 'Pin needs attention. Your choices are saved.';
+  return on ? 'Pin is on.' : 'Pin is off.';
+}

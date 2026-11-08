@@ -2,6 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { accountsItem, statusItem, prefsItem, wizardItem, loopPausesItem } from './store';
 import { fetchAccountsViaTab, NoGoogleTabError } from './safariAccounts';
+import * as safariPin from './safariPin';
 
 const account = { email: 'a@example.com', name: 'A', photo: '', index: 1, signedOut: false };
 const own = { id: 'test-extension-id', url: 'chrome-extension://test-extension-id/popup.html' };
@@ -221,6 +222,35 @@ it('does not claim failed rule cleanup succeeded', async () => {
   expect(state.data.pinError).toContain('could not confirm that existing rules were removed');
   expect(state.data.pinError).toContain('Allow in Private Browsing off');
   dynamic.mockImplementation(async () => {});
+});
+it.each([false, true])('does not announce a requested Pin=%s state after cleanup fails', async requestedOn => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  privateAccess.mockResolvedValue(true);
+  dynamic.mockRejectedValue(new Error('removal rejected'));
+  await send({ type: 'savePrefs', patch: { pinEnabled: requestedOn } });
+  const state = (await send({ type: 'getState' })).data;
+  expect(state.prefs.pinEnabled).toBe(requestedOn);
+  expect(state.pinError).toContain('could not confirm that existing rules were removed');
+  const feedback = safariPin.safariPinFeedback(state.prefs.pinEnabled, state.pinError, true);
+  expect(feedback).toBe('Pin needs attention. Your choices are saved.');
+  expect(feedback).not.toMatch(/\b(on|off|paused)\b/);
+});
+it.each([false, true])('does not claim a requested Pin=%s state when fresh verification fails', requestedOn => {
+  const feedback = safariPin.safariPinFeedback(requestedOn, null, false);
+  expect(feedback).toBe('Pin needs attention. Reopen Uzero or refresh.');
+  expect(feedback).not.toMatch(/\b(on|off|paused|saved)\b/);
+});
+it.each([[false, 'Pin is off.'], [true, 'Pin is on.']] as const)('announces healthy verified Pin=%s', async (requestedOn, expected) => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: requestedOn, order: [account.email] } });
+  const state = (await send({ type: 'getState' })).data;
+  expect(state.pinError).toBeNull();
+  expect(safariPin.safariPinFeedback(state.prefs.pinEnabled, state.pinError, true)).toBe(expected);
+});
+it('treats missing Pin state as unverified rather than healthy', () => {
+  expect(safariPin.safariPinFeedback(false, undefined, true)).toBe('Pin needs attention. Reopen Uzero or refresh.');
 });
 it('normal account discovery still uses its tab and never an Origin workaround', async () => {
   vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 12, incognito: false, url: 'https://accounts.google.com/', status: 'complete' }] as any);
