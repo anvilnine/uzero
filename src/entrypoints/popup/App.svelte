@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { getApi, type Api } from '../../lib/api';
+  import { SAFARI_PRIVATE_LIMITATION } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
   import { inProgress } from '../../lib/wizard';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
@@ -123,8 +124,11 @@
     writeCache(app);
     try {
       await api.send({ type: 'savePrefs', patch });
+      if (import.meta.env.BROWSER === 'safari') accept(await api.send({ type: 'getState' }));
+      return true;
     } catch (e) {
       say(errorText(e));
+      return false;
     }
   }
 
@@ -178,8 +182,10 @@
   }
 
   async function togglePin(on: boolean) {
-    await save({ pinEnabled: on });
-    announce = on ? 'Pin is on.' : 'Pin is off.';
+    const saved = await save({ pinEnabled: on });
+    announce = import.meta.env.BROWSER === 'safari' && !saved
+      ? 'Could not verify Pin. Reopen Uzero or refresh.'
+      : on && app?.pinError ? 'Pin is paused. Your choices are saved.' : on ? 'Pin is on.' : 'Pin is off.';
   }
 
   async function makeItReal() {
@@ -376,6 +382,13 @@
     </div>
   </header>
 
+  {#if import.meta.env.BROWSER === 'safari'}
+    <aside class="safari-note" aria-label="Safari limitation">
+      <p>{SAFARI_PRIVATE_LIMITATION}</p>
+      {#if app?.pinError}<p role="status">{app.pinError}</p>{/if}
+    </aside>
+  {/if}
+
   {#if fatal && !app}
     <div class="state">
       <h2>Couldn’t load your accounts</h2>
@@ -406,7 +419,9 @@
       <div class="pin-text">
         <span class="pin-title" id="pin-title">Pin default account</span>
         <span class="pin-desc" id="pin-desc">
-          {#if app.prefs.pinEnabled && first}
+          {#if app.pinError}
+            Pin is paused. Your choices are saved.
+          {:else if app.prefs.pinEnabled && first}
             Links without an account open as {first.meta.label ?? first.name}.
           {:else}
             Google picks the account for links.
@@ -516,7 +531,7 @@
       {#if reorder}
         <p>
           {#if reorder.expired}
-            Reorder paused.{app.prefs.pinEnabled ? ' Pin is back on.' : ''}
+            Reorder paused.{app.prefs.pinEnabled ? (app.pinError ? ' Pin is paused.' : ' Pin is back on.') : ''}
           {:else}
             Reorder in progress.
           {/if}
@@ -631,6 +646,14 @@
       transform: rotate(360deg);
     }
   }
+
+  .safari-note {
+    margin: 0 16px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--on-surface-variant);
+  }
+  .safari-note p { margin: 0 0 8px; }
 
   /* Pin ---------------------------------------------------------------- */
   .pin {

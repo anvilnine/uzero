@@ -1,6 +1,6 @@
 # Uzero Privacy Policy
 
-**Effective date:** 2026-11-05
+**Effective date:** 2026-11-09
 
 > **Short version.** Uzero runs only in your browser. We have no servers, so we never receive your data. Uzero talks only to Google, and only to do what you ask. It never sees your passwords.
 
@@ -28,7 +28,7 @@ Safari exposes tab addresses through its `tabs` permission. Uzero checks them to
 
 All data stays **on your device**, in the browser's own extension storage:
 
-- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list. The popup keeps one more copy of that list in its own page storage, so it opens fast.
+- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list. The Chrome, Edge and Firefox popup keeps one more copy of that list in its own page storage, so it opens fast. Safari does not use that popup cache.
 - **Deleted when the browser closes:** the progress of a reorder, and short-term status.
 
 We have no servers, no database and no account system. **We never receive a copy of your data, so we cannot see, sell or share it.**
@@ -68,7 +68,11 @@ Chrome, Edge and Firefox do not add scripts to Google's sign-in pages. Safari us
 | `tabs` (Safari only) | Find eligible normal Google tabs and verify that private tabs are excluded. |
 | `scripting` (Safari only) | Request the account list through an existing normal Google tab. Show the optional reorder overlay on the current Google sign-in tab. |
 
-Uzero does not ask for access to all websites, cookies, or downloads. Chrome, Edge and Firefox do not request the `tabs` permission. Safari does request it for the checks described above. Safari rejects private tabs and tabs whose privacy status it cannot verify, even when Safari allows the extension in Private Browsing. Pin is unavailable in Safari because its redirect rules cannot be safely restricted to normal windows.
+Uzero does not ask for access to all websites, cookies, or downloads. Chrome, Edge and Firefox do not request the `tabs` permission. Safari does request it for the checks described above. Safari rejects private tabs and tabs whose privacy status it cannot verify for account discovery, messages, tab switching, page creation and the reorder guide. These checks remain in place even if you allow the extension in Private Browsing.
+
+**Safari Private Browsing is unsupported.** Leave **Allow in Private Browsing** off in Safari settings > Extensions > Uzero. Pin and per-service Pin work in regular browsing only after Safari's `extension.isAllowedIncognitoAccess()` returns exactly `false`. If access is on, unknown, unavailable or fails to check, Uzero pauses Pin, tries to remove existing redirect and loop rules, and shows an instruction to turn private access off and reopen Uzero or refresh. Saved Pin preferences remain on your device. Rule-installation and removal errors are shown separately from account-list errors.
+
+Safari's redirect rules cannot be limited to normal windows. Enabling private access can make Safari apply already-installed Pin redirects in private windows before Uzero detects the change and pauses Pin. Uzero rechecks on worker startup, rule updates, normal UI state/refresh/preference requests and supported permission/focus wakeups. These are permission snapshots, not an atomic guarantee against later changes. Uzero does not promise immediate detection or that private navigation is unaffected when private access is enabled.
 
 The exact Google sites Uzero can access are listed in the appendix below.
 

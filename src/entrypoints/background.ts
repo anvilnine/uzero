@@ -6,15 +6,16 @@ import type { Account, AppState, Envelope, Prefs, Request, ResponseMap, WizardSt
 import { fetchAccounts, indexByEmail } from '@/lib/accounts';
 import { fetchAccountsViaTab, isGoogleTabUrl, NoGoogleTabError } from '@/lib/safariAccounts';
 import {
-  SAFARI_PIN_UNAVAILABLE, LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
+  LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
 } from '@/lib/dnr';
 import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, safariGuideTabRemoved, showSafariGuide } from '@/lib/safariGuide';
+import { safariPinError } from '@/lib/safariPin';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
 import { currentEmail, switchableServiceId, toAccount } from '@/lib/rewrite';
 import { ACCOUNT_HOSTS, SERVICES, serviceById, toServiceInfo } from '@/lib/services';
 import {
-  accountsItem, applyPrefsPatch, loopPausesItem, mergeOrder, prefsItem, sameJson, statusItem, wizardItem,
+  accountsItem, applyPrefsPatch, loopPausesItem, mergeOrder, pinErrorItem, prefsItem, sameJson, statusItem, wizardItem,
 } from '@/lib/store';
 import {
   WIZARD_TTL_MS, isActive, isExpired, lastActivity, reduce, signInUrl, stepChanged, tabUrlFor, type WizardEvent,
@@ -42,8 +43,6 @@ const PANEL_PAGE = '/sidepanel.html' as PublicPath;
 // BROWSER (not FIREFOX): vitest defines env flags as strings, so "false" would be truthy there.
 const IS_FIREFOX = import.meta.env.BROWSER === 'firefox';
 const IS_SAFARI = import.meta.env.BROWSER === 'safari';
-/** Host of our own pages. Chrome: the extension id. Safari: a per-install UUID, never runtime.id. */
-const OWN_HOST = new URL(browser.runtime.getURL('/')).host;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener(onMessage);
@@ -71,8 +70,14 @@ export default defineBackground(() => {
     void onTabRemoved(tabId);
   });
   if (IS_FIREFOX) installFirefoxOriginFallback();
-  // Remove rules persisted by an older Safari build on every worker start, before any refresh.
-  if (IS_SAFARI) void syncRules();
+  if (IS_SAFARI) {
+    // Best-effort wakeups. Safari does not promise an atomic notification of private-access changes.
+    browser.permissions?.onAdded?.addListener(() => void syncRules());
+    browser.permissions?.onRemoved?.addListener(() => void syncRules());
+    browser.windows.onFocusChanged?.addListener(() => void syncRules());
+    // Verify on every worker start, including rules persisted by older builds.
+    void syncRules();
+  }
 });
 
 // ---- helpers -----------------------------------------------------------------
@@ -106,13 +111,17 @@ function hostOf(url: string | undefined): string | null {
 }
 
 async function getState(): Promise<AppState> {
+  // Check before returning state, even when account discovery has not changed anything.
+  if (IS_SAFARI) await syncRules();
   const [accounts, prefs, status, stored] = await Promise.all([
     accountsItem.getValue(), prefsItem.getValue(), statusItem.getValue(), wizardItem.getValue(),
   ]);
   // An abandoned wizard expires here too, so pin mode comes back as soon as any page looks.
-  const wizard = isExpired(stored, Date.now()) ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
-  return { accounts, prefs, status: IS_SAFARI && prefs.pinEnabled
-    ? { kind: 'error', message: status.kind === 'error' ? `${status.message} ${SAFARI_PIN_UNAVAILABLE}` : SAFARI_PIN_UNAVAILABLE, at: Date.now() } : status, wizard };
+  const expired = isExpired(stored, Date.now());
+  const wizard = expired ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
+  // Expiry queues a rules job. Do not return a healthy Pin status before that install finishes.
+  if (IS_SAFARI && expired) await syncRules();
+  return { accounts, prefs, status, wizard, ...(IS_SAFARI ? { pinError: await pinErrorItem.getValue() } : {}) };
 }
 
 function updatePrefs(fn: (prev: Prefs) => Prefs): Promise<{ prev: Prefs; next: Prefs }> {
@@ -130,7 +139,7 @@ async function onBrowserStart(): Promise<void> {
   const prefs = await prefsItem.getValue();
   await syncAlarm(prefs.pinEnabled);
   await refresh();
-  // Rules may come from an older version; rebuild once even if nothing changed.
+  // Sync after refresh even if the account list did not change.
   await syncRules();
 }
 
@@ -140,43 +149,87 @@ async function syncAlarm(pinEnabled: boolean): Promise<void> {
   if (!pinEnabled && existing) await browser.alarms.clear(REFRESH_ALARM);
 }
 
-/** Replace all dynamic rules in one atomic call. Pin mode pauses while the wizard runs. */
+/** Only successful writes populate this worker-local cache. Permission is still checked every time. */
+let safariRulesKey: string | null = null;
+
+/** Replace redirects and Safari loop rules under one lock, including the async permission check. */
 function syncRules(): Promise<void> {
   return rulesLock(async () => {
     try {
+      const permissionError = IS_SAFARI ? await safariPinError(browser.extension) : null;
       const [prefs, accounts, wizard] = await Promise.all([
         prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
       ]);
-      const paused = isActive(wizard) || IS_SAFARI;
+      const paused = isActive(wizard) || permissionError !== null;
       const rules = paused ? [] : buildRules(prefs, accounts);
-      pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
-      const existing = await browser.declarativeNetRequest.getDynamicRules();
+      let nextSafariKey: string | null = null;
+      let safariLoopRules: DnrRule[] = [];
+      if (IS_SAFARI) {
+        const pauses = await loopPausesItem.getValue();
+        const liveHosts = Object.keys(pauses).filter(host => pauses[host]! > Date.now());
+        safariLoopRules = !paused && prefs.pinEnabled ? loopAllowRules(liveHosts) as unknown as DnrRule[] : [];
+        nextSafariKey = JSON.stringify({ eligible: permissionError === null, rules, loopRules: safariLoopRules });
+        if (safariRulesKey === nextSafariKey) {
+          await setPinError(permissionError);
+          return;
+        }
+      }
+      // Do not use a host map from an earlier successful install if this one fails.
+      pinHosts = new Map();
       if (IS_SAFARI) {
         const session = await browser.declarativeNetRequest.getSessionRules();
-        if (session.length) await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: session.map((r) => r.id) });
+        await browser.declarativeNetRequest.updateSessionRules({
+          removeRuleIds: session.map(r => r.id), // Also removes the old Safari Origin workaround.
+          addRules: safariLoopRules,
+        });
       }
+      const existing = await browser.declarativeNetRequest.getDynamicRules();
       await browser.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: existing.map((r) => r.id),
-        ...(IS_SAFARI ? {} : { addRules: rules as unknown as DnrRule[] }),
+        addRules: rules as unknown as DnrRule[],
       });
+      safariRulesKey = nextSafariKey;
+      pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
+      if (paused || !prefs.pinEnabled) loopHits.clear();
+      if (IS_SAFARI) await setPinError(permissionError);
     } catch (e) {
       console.error('[uzero] rules', e);
-      await clearRules();
+      const cleared = await clearRules();
+      if (IS_SAFARI) await setPinError(`Pin could not update its link rules: ${errorMessage(e)}. ${cleared ? 'Pin is paused.' : 'Uzero could not confirm that existing rules were removed.'} Keep Allow in Private Browsing off. Reopen Uzero or refresh to retry.`);
     }
   });
 }
 
-/** Fail closed: with no rules, links open where Google sends them, never at a stale /u/N. */
-async function clearRules(): Promise<void> {
+/** Notify open extension pages only on a status change, avoiding a getState/storage wakeup loop. */
+async function setPinError(message: string | null): Promise<void> {
+  if (await pinErrorItem.getValue() !== message) await pinErrorItem.setValue(message);
+}
+
+/** Fail closed after an installation error. A rejected removal is reported instead of hidden. */
+async function clearRules(): Promise<boolean> {
+  safariRulesKey = null;
   pinHosts = new Map();
+  loopHits.clear();
+  let cleared = true;
   try {
     const existing = await browser.declarativeNetRequest.getDynamicRules();
     if (existing.length) {
       await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id) });
     }
   } catch (e) {
+    cleared = false;
     console.error('[uzero] clearing rules', e);
   }
+  if (IS_SAFARI) {
+    try {
+      const session = await browser.declarativeNetRequest.getSessionRules();
+      if (session.length) await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: session.map(r => r.id) });
+    } catch (e) {
+      cleared = false;
+      console.error('[uzero] clearing session rules', e);
+    }
+  }
+  return cleared;
 }
 
 let originReady: Promise<void> | null = null;
@@ -184,11 +237,11 @@ let originReady: Promise<void> | null = null;
 /** Session rule that makes ListAccounts see a google.com Origin. Installed once per worker life. */
 function ensureOriginRule(): Promise<void> {
   // Firefox uses the webRequest fallback; its gecko id isn't a valid initiator domain.
-  if (IS_FIREFOX) return Promise.resolve();
+  if (IS_FIREFOX || IS_SAFARI) return Promise.resolve();
   originReady ??= browser.declarativeNetRequest
     .updateSessionRules({
       removeRuleIds: [ORIGIN_RULE_ID],
-      addRules: [originRule(IS_SAFARI ? OWN_HOST : browser.runtime.id, ORIGIN_RULE_ID) as unknown as DnrRule],
+      addRules: [originRule(browser.runtime.id, ORIGIN_RULE_ID) as unknown as DnrRule],
     })
     .catch((e) => {
       originReady = null;
@@ -228,11 +281,15 @@ const tabUrls = new Map<number, string>();
 const ACCOUNT_IN_URL = /[?&]authuser=|\/u\/\d/;
 
 async function currentPinHosts(): Promise<Map<string, number>> {
+  if (IS_SAFARI) {
+    await syncRules();
+    return pinHosts ?? new Map();
+  }
   if (pinHosts) return pinHosts;
   const [prefs, accounts, wizard] = await Promise.all([
     prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
   ]);
-  pinHosts = IS_SAFARI || isActive(wizard) ? new Map() : pinnedHosts(prefs, accounts);
+  pinHosts = isActive(wizard) ? new Map() : pinnedHosts(prefs, accounts);
   return pinHosts;
 }
 
@@ -273,13 +330,18 @@ function updateLoopPauses(fn: (p: Record<string, number>) => Record<string, numb
     const live = Object.fromEntries(Object.entries(await loopPausesItem.getValue()).filter(([, t]) => t > now));
     const next = fn(live);
     await loopPausesItem.setValue(next);
-    const existing = await browser.declarativeNetRequest.getSessionRules();
-    await browser.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: existing
-        .map((r) => r.id)
-        .filter((id) => id >= LOOP_RULE_BASE_ID && id < LOOP_RULE_BASE_ID + LOOP_MAX_HOSTS),
-      addRules: IS_SAFARI ? [] : loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
-    });
+    if (IS_SAFARI) {
+      // All Safari session and redirect writes share the eligibility check and rules lock.
+      await syncRules();
+    } else {
+      const existing = await browser.declarativeNetRequest.getSessionRules();
+      await browser.declarativeNetRequest.updateSessionRules({
+        removeRuleIds: existing
+          .map((r) => r.id)
+          .filter((id) => id >= LOOP_RULE_BASE_ID && id < LOOP_RULE_BASE_ID + LOOP_MAX_HOSTS),
+        addRules: loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
+      });
+    }
     const until = Object.values(next);
     if (until.length) await browser.alarms.create(LOOP_ALARM, { when: Math.min(...until) + 500 });
     else await browser.alarms.clear(LOOP_ALARM);
@@ -299,6 +361,7 @@ function refresh(): Promise<void> {
 }
 
 async function doRefresh(): Promise<void> {
+  if (IS_SAFARI) await syncRules();
   const status = await statusItem.getValue();
   if (status.kind !== 'ok') await statusItem.setValue({ kind: 'loading' });
 
@@ -698,8 +761,8 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       return getState();
     case 'savePrefs': {
       const { prev, next } = await updatePrefs((p) => applyPrefsPatch(p, req.patch));
+      if (IS_SAFARI || !sameJson(prev, next)) await syncRules();
       if (!sameJson(prev, next)) {
-        await syncRules();
         if (prev.pinEnabled !== next.pinEnabled) await syncAlarm(next.pinEnabled);
         if (IS_SAFARI && prev.safariGuideMode !== next.safariGuideMode) {
           const w = await wizardItem.getValue();
