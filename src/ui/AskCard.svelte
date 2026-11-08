@@ -1,0 +1,208 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import {
+    FEEDBACK_URL,
+    REVIEW_URLS,
+    SITE_URL,
+    SHARE_TEXT,
+    STORE_NAMES,
+    detectStore,
+    dismiss,
+    feedbackLink,
+    loadAsk,
+    rate,
+    route,
+    saveAsk,
+    shareLinks,
+    shouldAsk,
+    type AskState,
+  } from '../lib/ask';
+
+  /** Shown on the reorder "done" screen when Google's order matches. Never in the Safari build. */
+  let ask = $state<AskState | null>(null);
+  let asking = $state(false);
+  let rating = $state(0);
+  let hover = $state(0);
+  let copied = $state(false);
+
+  const store = detectStore(import.meta.env.BROWSER, typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  const reviewUrl = store ? REVIEW_URLS[store] : '';
+  const version = typeof browser !== 'undefined' && browser.runtime?.getManifest ? browser.runtime.getManifest().version : undefined;
+  const feedbackUrl = feedbackLink(FEEDBACK_URL, {
+    env: import.meta.env.MODE === 'production' ? 'prod' : 'dev',
+    source: 'reorder-done',
+    version,
+    locale: typeof navigator === 'undefined' ? undefined : navigator.language,
+  });
+  const shares = shareLinks();
+  const path = $derived(rating ? route(rating) : null);
+
+  onMount(async () => {
+    ask = await loadAsk();
+    asking = shouldAsk(ask, Date.now());
+  });
+
+  async function pick(n: number) {
+    if (!ask) return;
+    rating = n;
+    ask = rate(ask, n);
+    await saveAsk(ask);
+  }
+
+  async function notNow() {
+    if (!ask) return;
+    ask = dismiss(ask, Date.now());
+    asking = false;
+    await saveAsk(ask);
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(`${SHARE_TEXT} ${SITE_URL}`);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      // Clipboard blocked: the share buttons still work.
+    }
+  }
+</script>
+
+{#snippet shareRow()}
+  <div class="share" role="group" aria-label="Share Uzero">
+    {#each shares as s (s.id)}
+      <a class="btn btn-outlined small" href={s.href} target="_blank" rel="noreferrer">{s.label}</a>
+    {/each}
+    <button type="button" class="btn btn-outlined small" onclick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
+  </div>
+{/snippet}
+
+{#if asking && !rating}
+  <section class="ask" aria-labelledby="ask-title">
+    <h2 id="ask-title">How did Uzero do?</h2>
+    <div class="stars" role="radiogroup" aria-label="Rating" tabindex="-1">
+      {#each [1, 2, 3, 4, 5] as n (n)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={rating === n}
+          aria-label={`${n} of 5`}
+          class:on={(hover || rating) >= n}
+          onmouseenter={() => (hover = n)}
+          onmouseleave={() => (hover = 0)}
+          onfocus={() => (hover = n)}
+          onblur={() => (hover = 0)}
+          onclick={() => pick(n)}>★</button
+        >
+      {/each}
+    </div>
+    <button type="button" class="btn btn-text small" onclick={notNow}>Not now</button>
+  </section>
+{:else if path === 'review'}
+  <section class="ask" aria-live="polite">
+    <h2>Thanks. Glad it worked.</h2>
+    {#if reviewUrl && store}
+      <p>A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
+      <div class="row">
+        <a class="btn btn-filled" href={reviewUrl} target="_blank" rel="noreferrer">Write a review</a>
+      </div>
+    {/if}
+    <p>Know someone with too many Google accounts?</p>
+    {@render shareRow()}
+    {#if feedbackUrl}
+      <a class="quiet" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback instead</a>
+    {/if}
+  </section>
+{:else if path === 'feedback'}
+  <section class="ask" aria-live="polite">
+    <h2>Thanks for telling us.</h2>
+    {#if feedbackUrl}
+      <p>What got in the way? The form goes straight to the developer, and a reply comes back if you leave an email.</p>
+      <div class="row">
+        <a class="btn btn-filled" href={feedbackUrl} target="_blank" rel="noreferrer">Tell us what went wrong</a>
+      </div>
+    {:else}
+      <p>Tell us what went wrong on the <a href="https://uzero.app/support/" target="_blank" rel="noreferrer">support page</a>.</p>
+    {/if}
+    {#if reviewUrl && store}
+      <a class="quiet" href={reviewUrl} target="_blank" rel="noreferrer">Rate on the {STORE_NAMES[store]}</a>
+    {/if}
+  </section>
+{:else if ask && ask.rating && ask.rating >= 4}
+  <!-- Already rated happy on an earlier reorder: share only, no question. -->
+  <section class="ask plain">
+    <p>Know someone with too many Google accounts?</p>
+    {@render shareRow()}
+  </section>
+{/if}
+
+<style>
+  .ask {
+    margin: 0 0 24px;
+    padding: 16px;
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--r-md);
+    text-align: center;
+  }
+  .ask.plain {
+    border: 0;
+    padding: 0;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: var(--t-lg);
+    font-weight: 500;
+    line-height: 24px;
+    text-align: center;
+  }
+  p {
+    margin: 0 0 12px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 20px;
+    text-wrap: pretty;
+  }
+  .stars {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin: 0 0 4px;
+  }
+  .stars button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--outline-variant);
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stars button.on {
+    color: var(--primary);
+  }
+  .stars button:focus-visible {
+    outline: 2px solid var(--primary);
+  }
+  .row {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 12px;
+  }
+  .share {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 0 12px;
+  }
+  .small {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: var(--t-sm);
+  }
+  .quiet {
+    font-size: var(--t-sm);
+    color: var(--on-surface-variant);
+  }
+</style>
