@@ -2,8 +2,8 @@
 // docs/feedback-forms.md at the Anvil Nine root. Opening a link is the only thing that leaves the
 // browser, and only when the user clicks it. Uzero has no accounts, so no user fields are sent.
 
-/** Feature request form. Empty until the form exists: the link stays hidden. */
-export const FEATURE_REQUEST_URL = '';
+/** Feature request form. Set it to '' to hide the link. */
+export const FEATURE_REQUEST_URL = 'https://forms.zonily.cloud/form/9T5PLe7c';
 
 export interface FormContext {
   env: 'prod' | 'dev';
