@@ -67,6 +67,8 @@ export interface AppState {
   accounts: Account[];
   prefs: Prefs;
   status: FetchStatus;
+  /** Safari Pin eligibility or installation error, separate from account discovery. */
+  pinError?: string | null;
   wizard: WizardState | null;
 }
 

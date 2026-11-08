@@ -1,24 +1,31 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { accountsItem, statusItem, prefsItem, wizardItem } from './store';
+import { accountsItem, statusItem, prefsItem, wizardItem, loopPausesItem } from './store';
 import { fetchAccountsViaTab, NoGoogleTabError } from './safariAccounts';
 
 const account = { email: 'a@example.com', name: 'A', photo: '', index: 1, signedOut: false };
 const own = { id: 'test-extension-id', url: 'chrome-extension://test-extension-id/popup.html' };
 const dynamic = vi.fn(async (_: any) => {});
 const session = vi.fn(async (_: any) => {});
+const privateAccess = vi.fn(async (): Promise<unknown> => false);
 const script = vi.fn(async () => [{ result: { status: 200, body: '["gaia.l.a.r",[]]' } }]);
 async function send(msg: object, sender: object = own): Promise<any> {
   return new Promise(resolve => { void fakeBrowser.runtime.onMessage.trigger(msg, sender, resolve); });
 }
 beforeEach(async () => {
   vi.resetModules(); fakeBrowser.reset(); vi.clearAllMocks(); vi.stubEnv('BROWSER', 'safari');
+  dynamic.mockReset().mockImplementation(async () => {});
+  session.mockReset().mockImplementation(async () => {});
   Object.assign(fakeBrowser.declarativeNetRequest, {
     getDynamicRules: vi.fn(async () => [{ id: 7 }]), updateDynamicRules: dynamic,
     getSessionRules: vi.fn(async () => []), updateSessionRules: session,
   });
+  privateAccess.mockReset().mockResolvedValue(false);
+  Object.assign(fakeBrowser.extension, { isAllowedIncognitoAccess: privateAccess });
   Object.assign(fakeBrowser.scripting, { executeScript: script });
   Object.assign(fakeBrowser.commands, { onCommand: { addListener: vi.fn() } });
+  Object.assign(fakeBrowser.permissions, { onAdded: { addListener: vi.fn() }, onRemoved: { addListener: vi.fn() } });
+  Object.assign(fakeBrowser.windows, { onFocusChanged: { addListener: vi.fn() } });
   vi.spyOn(fakeBrowser.tabs, 'query').mockResolvedValue([{ id: 1, incognito: false, windowId: 1 }] as any);
   const bg = (await import('../entrypoints/background')).default as unknown as { main(): void }; bg.main();
 });
@@ -44,15 +51,183 @@ it('rejects private sender messages and private active-window popup actions', as
   for (const msg of [{ type: 'switchActiveTab', email: account.email }, { type: 'openService', serviceId: 'gmail', email: account.email }, { type: 'wizardOpen', queue: [account.email] }]) expect((await send(msg)).ok).toBe(false);
   expect(update).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
 });
-it('removes legacy global rules and reports the Safari Pin parity blocker', async () => {
-  vi.spyOn(fakeBrowser.tabs, 'query').mockResolvedValue([{ id: 10, incognito: false }, { id: 11, incognito: true }] as any);
+it('installs normal and per-service Pin only with verified private access off', async () => {
+  const second = { ...account, email: 'b@example.com', index: 2 };
+  await accountsItem.setValue([account, second]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email], serviceDefaults: { calendar: second.email } } });
+  const rules = dynamic.mock.calls.at(-1)![0].addRules;
+  expect(rules.some((r: any) => r.action.type === 'redirect' && JSON.stringify(r).includes('/mail/u/1/'))).toBe(true);
+  expect(rules.some((r: any) => r.action.type === 'redirect' && JSON.stringify(r).includes('/calendar/u/2/'))).toBe(true);
+  expect((await send({ type: 'getState' })).data.pinError).toBeNull();
+  expect(session.mock.calls.flatMap(([o]) => o.addRules ?? []).some((r: any) => r.action.type === 'modifyHeaders')).toBe(false);
+});
+it.each([true, undefined, null, 'false', 0, 'throw', 'missing'])('clears legacy redirect and loop rules when private access is %s', async access => {
   await accountsItem.setValue([account]);
-  await send({ type: 'savePrefs', patch: { pinEnabled: true } });
-  expect(dynamic).toHaveBeenCalledWith({ removeRuleIds: [7] });
-  expect(session.mock.calls.flatMap(([o]) => o.addRules ?? [])).toEqual([]);
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), pinEnabled: true, order: [account.email] });
+  vi.mocked(fakeBrowser.declarativeNetRequest.getSessionRules).mockResolvedValue([{ id: 1 }, { id: 9001 }] as any);
+  if (access === 'throw') privateAccess.mockRejectedValue(new Error('denied'));
+  else if (access === 'missing') Object.assign(fakeBrowser.extension, { isAllowedIncognitoAccess: undefined });
+  else privateAccess.mockResolvedValue(access);
+  dynamic.mockClear(); session.mockClear();
   const state = await send({ type: 'getState' });
-  expect(state.data.status).toMatchObject({ kind: 'error', message: expect.stringContaining('Pin is unavailable in Safari') });
+  expect(state.data.pinError).toContain('Allow in Private Browsing');
+  expect(state.data.pinError).toContain(access === true ? 'off' : 'verify');
+  expect(dynamic.mock.calls.at(-1)![0]).toMatchObject({ removeRuleIds: [7] });
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+  expect(session.mock.calls.at(-1)![0]).toMatchObject({ removeRuleIds: [1, 9001] });
+  expect(session.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
   expect((await prefsItem.getValue()).pinEnabled).toBe(true);
+});
+it('fresh-checks eligibility without rewriting unchanged successful rules on every UI state request', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  dynamic.mockClear(); session.mockClear(); privateAccess.mockClear();
+  await send({ type: 'getState' });
+  await send({ type: 'getState' });
+  expect(privateAccess).toHaveBeenCalledTimes(2);
+  expect(dynamic).not.toHaveBeenCalled();
+  expect(session).not.toHaveBeenCalled();
+  privateAccess.mockResolvedValue(true);
+  await send({ type: 'getState' });
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('recovers saved Pin after private access is disabled, including unchanged preference saves', async () => {
+  await accountsItem.setValue([account]);
+  privateAccess.mockResolvedValue(true);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  expect((await send({ type: 'getState' })).data.pinError).toContain('off');
+  privateAccess.mockResolvedValue(false);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true } });
+  expect(dynamic.mock.calls.at(-1)![0].addRules.length).toBeGreaterThan(10);
+  expect((await send({ type: 'getState' })).data.pinError).toBeNull();
+});
+it('does not install redirects while Pin is off or the wizard is active', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'getState' });
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+  await wizardItem.setValue({ phase: 'signing-in', queue: [account.email], current: 0, completed: [], startedAt: Date.now() });
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+  await send({ type: 'wizardCancel' });
+  expect(dynamic.mock.calls.at(-1)![0].addRules.length).toBeGreaterThan(10);
+});
+it('keeps rule-installation failures visible without replacing account errors', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await accountsItem.setValue([account]);
+  await statusItem.setValue({ kind: 'error', message: 'Google request failed (403).', at: 1 });
+  dynamic.mockImplementation(async o => { if (o.addRules?.length) throw new Error('DNR rejected'); });
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  const state = await send({ type: 'getState' });
+  expect(state.data.pinError).toContain('DNR rejected');
+  expect(state.data.status.message).toBe('Google request failed (403).');
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+  dynamic.mockImplementation(async () => {});
+});
+it('waits for expired-wizard Pin recovery before returning its installation status', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await accountsItem.setValue([account]);
+  await prefsItem.setValue({ ...(await prefsItem.getValue()), pinEnabled: true, order: [account.email] });
+  await wizardItem.setValue({ phase: 'signing-in', queue: [account.email], current: 0, completed: [], startedAt: Date.now() - 31 * 60_000 });
+  dynamic.mockImplementation(async o => { if (o.addRules?.length) throw new Error('resume rejected'); });
+  const state = await send({ type: 'getState' });
+  expect(state.data.wizard.errorKind).toBe('expired');
+  expect(state.data.pinError).toContain('resume rejected');
+  dynamic.mockImplementation(async () => {});
+});
+it('rechecks private access during refresh even when no Google tab exists', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  privateAccess.mockResolvedValue(true);
+  await send({ type: 'refresh' });
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('serializes delayed eligibility checks so a later unsafe check removes earlier rules', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  let release!: (value: unknown) => void;
+  privateAccess.mockImplementationOnce(() => new Promise(resolve => { release = resolve; })).mockResolvedValue(true);
+  const first = send({ type: 'getState' });
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  const second = send({ type: 'getState' });
+  release(false);
+  await Promise.all([first, second]);
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('installs eligible loop allow rules and removes them with redirects when private access changes', async () => {
+  await accountsItem.setValue([account]);
+  await loopPausesItem.setValue({ 'mail.google.com': Date.now() + 60_000 });
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  expect(session.mock.calls.at(-1)![0].addRules).toEqual([expect.objectContaining({ action: { type: 'allow' }, condition: expect.objectContaining({ requestDomains: ['mail.google.com'] }) })]);
+  privateAccess.mockResolvedValue(true);
+  await fakeBrowser.alarms.onAlarm.trigger({ name: 'uzero-loop-pauses' } as any);
+  await vi.waitFor(() => expect(session.mock.calls.at(-1)![0].addRules ?? []).toEqual([]));
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('records real normal-tab redirect loops and installs a host allow rule', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  const go = async (url: string) => {
+    await fakeBrowser.tabs.onUpdated.trigger(10, { status: 'loading', url }, { id: 10, incognito: false, url } as any);
+    await new Promise(resolve => setTimeout(resolve, 5));
+  };
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  for (let i = 0; i < 3; i++) {
+    await go('https://mail.google.com/mail/');
+    await go('https://mail.google.com/mail/u/1/');
+  }
+  await vi.waitFor(async () => expect(Object.keys(await loopPausesItem.getValue())).toEqual(['mail.google.com']));
+  expect(session.mock.calls.at(-1)![0].addRules).toEqual([expect.objectContaining({ action: { type: 'allow' }, condition: expect.objectContaining({ requestDomains: ['mail.google.com'] }) })]);
+  expect(await fakeBrowser.alarms.get('uzero-loop-pauses')).toBeDefined();
+});
+it.each(['onAdded', 'onRemoved', 'onFocusChanged'] as const)('rechecks eligibility on the supported %s wakeup', async event => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  privateAccess.mockResolvedValue(true);
+  dynamic.mockClear();
+  const source = event === 'onFocusChanged' ? fakeBrowser.windows[event] : fakeBrowser.permissions[event];
+  const wake = vi.mocked(source.addListener).mock.calls[0]![0] as (...args: any[]) => void;
+  wake(event === 'onFocusChanged' ? 1 : {});
+  await vi.waitFor(() => expect(dynamic).toHaveBeenCalled());
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('verifies persisted rules on worker restart without a UI request', async () => {
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  privateAccess.mockResolvedValue(true); dynamic.mockClear();
+  vi.resetModules();
+  const bg = (await import('../entrypoints/background')).default as unknown as { main(): void };
+  bg.main();
+  await vi.waitFor(() => expect(dynamic).toHaveBeenCalled());
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+});
+it('reports a rejected loop-rule install and clears redirects too', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  await loopPausesItem.setValue({ 'mail.google.com': Date.now() + 60_000 });
+  session.mockImplementation(async o => { if (o.addRules?.length) throw new Error('session rejected'); });
+  const state = await send({ type: 'getState' });
+  expect(state.data.pinError).toContain('session rejected');
+  expect(dynamic.mock.calls.at(-1)![0].addRules ?? []).toEqual([]);
+  session.mockImplementation(async () => {});
+});
+it('does not claim failed rule cleanup succeeded', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await accountsItem.setValue([account]);
+  await send({ type: 'savePrefs', patch: { pinEnabled: true, order: [account.email] } });
+  privateAccess.mockResolvedValue(true);
+  dynamic.mockRejectedValue(new Error('removal rejected'));
+  const state = await send({ type: 'getState' });
+  expect(state.data.pinError).toContain('could not confirm that existing rules were removed');
+  expect(state.data.pinError).toContain('Allow in Private Browsing off');
+  dynamic.mockImplementation(async () => {});
+});
+it('normal account discovery still uses its tab and never an Origin workaround', async () => {
+  vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 12, incognito: false, url: 'https://accounts.google.com/', status: 'complete' }] as any);
+  const result = await send({ type: 'refresh' });
+  expect(result.data.status.kind).toBe('ok');
+  expect(script).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 12 } }));
+  expect(session.mock.calls.flatMap(([o]) => o.addRules ?? []).some((r: any) => r.action.type === 'modifyHeaders')).toBe(false);
 });
 it('ignores private tab update events without discovering accounts', async () => {
   vi.useFakeTimers();
@@ -100,12 +275,13 @@ it('rejects empty or unknown active context and unknown sender privacy', async (
   vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([{ id: 1, incognito: false }] as any);
   expect((await send({ type: 'getState' }, { ...own, tab: { id: 2 } })).ok).toBe(false);
 });
-it('preserves account errors alongside the visible Pin blocker', async () => {
+it('preserves account errors alongside the visible private-access instruction', async () => {
   await prefsItem.setValue({ ...(await prefsItem.getValue()), pinEnabled: true });
   await statusItem.setValue({ kind: 'error', message: 'Open any Google page, then open Uzero again.', at: 1 });
+  privateAccess.mockResolvedValue(true);
   const res = await send({ type: 'getState' });
   expect(res.data.status.message).toContain('Open any Google page');
-  expect(res.data.status.message).toContain('Pin is unavailable in Safari');
+  expect(res.data.pinError).toContain('Allow in Private Browsing');
 });
 it('pins service and overlay confirmation tab creation to a revalidated normal window', async () => {
   await prefsItem.setValue({ ...(await prefsItem.getValue()), safariGuideMode: 'overlay' });

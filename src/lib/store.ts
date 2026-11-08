@@ -26,6 +26,7 @@ export const prefsItem = {
   },
 };
 export const accountsItem = storage.defineItem<Account[]>(KEY_ACCOUNTS, { fallback: [] });
+export const pinErrorItem = storage.defineItem<string | null>('session:pinError', { fallback: null });
 export const statusItem = storage.defineItem<FetchStatus>(KEY_STATUS, { fallback: { kind: 'idle' } });
 export const wizardItem = storage.defineItem<WizardState | null>(KEY_WIZARD, { fallback: null });
 export const loopPausesItem = storage.defineItem<Record<string, number>>(KEY_LOOP_PAUSES, { fallback: {} });

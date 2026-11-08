@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
+  import { SAFARI_PRIVATE_LIMITATION } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
   import type { AppState, LabelColor, Prefs, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
@@ -51,6 +52,7 @@
     app = { ...app, prefs: { ...app.prefs, ...patch } };
     try {
       await api.send({ type: 'savePrefs', patch });
+      if (import.meta.env.BROWSER === 'safari') app = await api.send({ type: 'getState' });
     } catch (e) {
       notice = { kind: 'error', text: errorText(e) };
     }
@@ -154,6 +156,13 @@
 <main class="page">
   <h1>Settings</h1>
 
+  {#if import.meta.env.BROWSER === 'safari'}
+    <aside class="card pad small" aria-label="Safari limitation">
+      <p>{SAFARI_PRIVATE_LIMITATION}</p>
+      {#if app?.pinError}<p class="error" role="status">{app.pinError}</p>{/if}
+    </aside>
+  {/if}
+
   {#if loadError}
     <div class="card pad" role="alert">
       <p class="error">Couldn’t load your settings. {loadError}</p>
@@ -231,7 +240,7 @@
         <div>
           <span class="strong" id="pin-l">Pin default account</span>
           <span class="muted small" id="pin-d">
-            {app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.'}
+            {app.pinError ? 'Pin is paused. Your choices are saved.' : app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.'}
           </span>
         </div>
         <Toggle
