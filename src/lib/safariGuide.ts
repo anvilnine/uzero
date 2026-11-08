@@ -1,5 +1,6 @@
 // Safari presentation only. Wizard state and Google navigation remain background-owned.
 import { browser, type Browser, type PublicPath } from 'wxt/browser';
+import { storage } from 'wxt/utils/storage';
 import type { SafariGuideMode, WizardState } from './types';
 import { inProgress, lastActivity, WIZARD_TTL_MS } from './wizard';
 
@@ -33,26 +34,61 @@ export async function authorizeSafariGuide(sender: Browser.runtime.MessageSender
   return !!tab && isAccountsPage(tab.url) && (!tab.pendingUrl || isAccountsPage(tab.pendingUrl));
 }
 
+type Placement = { id: number; left: number; top: number; width: number; height: number; appliedWidth: number };
+type Ownership = { version: 1; tabId: number; windowId: number; url: string; incognito: false; reserved?: Placement };
+// Session storage survives MV3 worker retirement, never browser-session end. No account data.
+const presentationItem = storage.defineItem<unknown>('session:safariGuidePresentation', { fallback: null });
+let hydrated = false;
+let owned: Ownership | undefined;
 let pageTabId: number | undefined;
-let reserved: { id: number; left: number; top: number; width: number; height: number; appliedWidth: number } | undefined;
+let reserved: Placement | undefined;
+const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
+const id = (value: unknown): value is number => integer(value) && value >= 0;
+function readOwnership(value: unknown): Ownership | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.version !== 1 || !id(raw.tabId) || !id(raw.windowId) || raw.incognito !== false || raw.url !== windowUrl()) return undefined;
+  let bounds: Placement | undefined;
+  if (raw.reserved !== undefined) {
+    if (!raw.reserved || typeof raw.reserved !== 'object' || Array.isArray(raw.reserved)) return undefined;
+    const r = raw.reserved as Record<string, unknown>;
+    if (!id(r.id) || r.id === raw.windowId || !integer(r.left) || !integer(r.top) || !integer(r.width) || !integer(r.height)
+      || !integer(r.appliedWidth) || r.width < 960 || r.height <= 0 || r.appliedWidth !== r.width - 360) return undefined;
+    bounds = { id: r.id, left: r.left, top: r.top, width: r.width, height: r.height, appliedWidth: r.appliedWidth };
+  }
+  return { version: 1, tabId: raw.tabId, windowId: raw.windowId, url: raw.url, incognito: false, reserved: bounds };
+}
+async function hydrate(): Promise<void> {
+  if (hydrated) return;
+  owned = readOwnership(await presentationItem.getValue());
+  pageTabId = owned?.tabId;
+  reserved = owned?.reserved;
+  hydrated = true;
+}
+async function persist(): Promise<void> {
+  await presentationItem.setValue(owned ? { ...owned, reserved } : null);
+}
 
 /** Restore only geometry we still own. A user move/resize takes ownership away from Uzero. */
 async function restorePlacement(): Promise<void> {
   const old = reserved; reserved = undefined;
+  await persist();
   if (!old) return;
   const win = await browser.windows.get(old.id).catch(() => undefined);
-  if (win?.incognito === false && win.type === 'normal' && win.left === old.left && win.top === old.top
+  if (win?.id === old.id && win.incognito === false && win.type === 'normal' && win.left === old.left && win.top === old.top
     && win.width === old.appliedWidth && win.height === old.height) {
     await browser.windows.update(old.id, { width: old.width }).catch(() => undefined);
   }
 }
 let tail: Promise<unknown> = Promise.resolve();
 function serial<T>(fn: () => Promise<T>): Promise<T> {
-  const run = tail.then(fn, fn); tail = run.catch(() => undefined); return run;
+  const run = tail.catch(() => undefined).then(async () => { await hydrate(); return fn(); });
+  tail = run.catch(() => undefined); return run;
 }
 async function guideTab(w: WizardState | null): Promise<Browser.tabs.Tab | undefined> {
   const tab = await normalTab(pageTabId ?? w?.pageTabId);
-  return tab?.url === windowUrl() ? tab : undefined;
+  return tab?.url === windowUrl() && (!tab.pendingUrl || tab.pendingUrl === windowUrl())
+    && (!owned || tab.windowId === owned.windowId) ? tab : undefined;
 }
 async function removeOverlay(w: WizardState | null): Promise<void> {
   const tab = await normalTab(w?.tabId);
@@ -64,17 +100,19 @@ async function removeWindow(w: WizardState | null): Promise<void> {
   const tab = await guideTab(w);
   if (tab?.id !== undefined) await browser.tabs.remove(tab.id).catch(() => undefined);
   pageTabId = undefined;
+  owned = undefined;
   await restorePlacement();
 }
 export function removeSafariGuide(wizard: WizardState | null, closeWindow = true): Promise<void> {
   return serial(async () => { await removeOverlay(wizard); if (closeWindow) await removeWindow(wizard); });
 }
-/** A removal event has no privacy metadata. Accept only our worker-tracked normal popup.
+/** A removal event has no privacy metadata. Accept only our validated session-owned normal popup.
  * This is presentation cleanup only, never a Google-tab/wizard cancellation event. */
-export function safariGuideTabRemoved(tabId: number): Promise<boolean> {
+export function safariGuideTabRemoved(tabId: number, windowId: number): Promise<boolean> {
   return serial(async () => {
-    if (pageTabId !== tabId) return false;
+    if (owned?.tabId !== tabId || owned.windowId !== windowId) return false;
     pageTabId = undefined;
+    owned = undefined;
     await restorePlacement();
     return true;
   });
@@ -119,6 +157,8 @@ export function showSafariGuide(mode: SafariGuideMode, wizard: WizardState | nul
       return tab.id;
     }
     if (!userTriggered) return undefined;
+    owned = undefined;
+    pageTabId = undefined;
     await restorePlacement();
     const bounds = await placement(wizard).catch(() => undefined);
     let win: Browser.windows.Window | undefined;
@@ -130,11 +170,13 @@ export function showSafariGuide(mode: SafariGuideMode, wizard: WizardState | nul
       if (bounds) win = await browser.windows.create(options).catch(() => undefined);
     }
     const created = win?.tabs?.[0];
-    if (win?.incognito !== false || created?.id === undefined) {
+    if (win?.incognito !== false || !id(win.id) || created?.id === undefined || !id(created.id)) {
       await restorePlacement();
       throw new Error(WINDOW_UNAVAILABLE);
     }
     pageTabId = created.id;
+    owned = { version: 1, tabId: pageTabId, windowId: win.id, url: windowUrl(), incognito: false };
+    await persist();
     return pageTabId;
   });
 }

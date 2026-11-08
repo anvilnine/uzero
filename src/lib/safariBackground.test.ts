@@ -226,3 +226,62 @@ it('unobserved non-guide removals cannot mutate the Safari wizard', async () => 
   await new Promise(resolve => setTimeout(resolve, 10));
   expect(await wizardItem.getValue()).toEqual(w);
 });
+
+it.each(['expired', 'tab-closed'] as const)('explicit reopen retains the %s recovery window and Retry remains reachable', async errorKind => {
+  const recovery = { phase: 'error' as const, errorKind, error: 'Paused', queue: [account.email], current: 0, completed: [], startedAt: Date.now() - 31 * 60_000 };
+  await wizardItem.setValue(recovery);
+  const page = { id: 23, windowId: 22, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window' };
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 22, incognito: false, tabs: [page] } as any);
+  vi.spyOn(fakeBrowser.tabs, 'get').mockImplementation(async id => id === 23 ? page as any : undefined as any);
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  const opened = await send({ type: 'wizardOpen', queue: [account.email] });
+  expect(opened).toMatchObject({ ok: true, data: { phase: 'error', errorKind, pageTabId: 23 } });
+  expect(remove).not.toHaveBeenCalledWith(23);
+  const sender = { ...own, url: page.url, frameId: 0, tab: page };
+  expect((await send({ type: 'getState' }, sender)).data.wizard.errorKind).toBe(errorKind);
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: 1, incognito: false, type: 'normal' }] as any);
+  vi.spyOn(fakeBrowser.windows, 'get').mockResolvedValue({ id: 1, incognito: false, type: 'normal' } as any);
+  vi.spyOn(fakeBrowser.tabs, 'create').mockResolvedValue({ id: 10, windowId: 1, incognito: false } as any);
+  expect((await send({ type: 'wizardRetry' }, sender)).data.phase).toBe('signing-out');
+  expect(remove).not.toHaveBeenCalledWith(23);
+});
+
+it('passive expiry closes the guide and never creates a replacement popup', async () => {
+  const page = { id: 23, windowId: 22, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window' };
+  vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue(page as any);
+  await wizardItem.setValue({ phase: 'signing-in', tabId: 10, pageTabId: 23, queue: [account.email], current: 0, completed: [], startedAt: Date.now() - 31 * 60_000 });
+  const create = vi.spyOn(fakeBrowser.windows, 'create');
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  await fakeBrowser.alarms.onAlarm.trigger({ name: 'uzero-wizard-expiry' } as any);
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledWith(23));
+  expect((await wizardItem.getValue())?.errorKind).toBe('expired');
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each(['untouched', 'moved', 'resized', 'confirmation'])('worker restart retains native-close ownership and geometry (%s)', async change => {
+  const source = { id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 1000, height: 800 };
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([source] as any);
+  vi.spyOn(fakeBrowser.windows, 'get').mockImplementation(async () => ({ ...source }) as any);
+  const update = vi.spyOn(fakeBrowser.windows, 'update').mockImplementation(async (_id, patch) => { Object.assign(source, patch); return { ...source } as any; });
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 22, incognito: false, tabs: [{ id: 23 }] } as any);
+  await send({ type: 'wizardOpen', queue: [account.email] });
+  expect(source.width).toBe(640);
+  const w = { ...(await wizardItem.getValue())!, ...(change === 'confirmation' ? {} : { phase: 'signing-in' as const, tabId: 10 }) };
+  await wizardItem.setValue(w);
+  if (change === 'moved') source.left = 120;
+  if (change === 'resized') source.height = 780;
+  // Retire worker modules/listeners, preserving browser storage and window state.
+  for (const event of [fakeBrowser.tabs.onRemoved, fakeBrowser.tabs.onUpdated, fakeBrowser.runtime.onMessage, fakeBrowser.alarms.onAlarm]) {
+    event.removeAllListeners();
+  }
+  vi.resetModules();
+  const bg = (await import('../entrypoints/background')).default as unknown as { main(): void }; bg.main();
+  update.mockClear();
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove');
+  await fakeBrowser.tabs.onRemoved.trigger(23, { windowId: 22, isWindowClosing: true });
+  await vi.waitFor(async () => expect((await wizardItem.getValue())?.pageTabId).toBeUndefined());
+  expect(await wizardItem.getValue()).toEqual({ ...w, pageTabId: undefined });
+  expect(remove).not.toHaveBeenCalled();
+  if (change === 'untouched' || change === 'confirmation') expect(update).toHaveBeenCalledWith(1, { width: 1000 });
+  else expect(update).not.toHaveBeenCalled();
+});
