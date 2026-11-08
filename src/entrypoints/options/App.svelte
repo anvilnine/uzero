@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
-  import { SAFARI_PRIVATE_LIMITATION } from '../../lib/safariPin';
+  import { SAFARI_PRIVATE_LIMITATION, safariPinFeedback } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
   import type { AppState, LabelColor, Prefs, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
@@ -14,12 +14,15 @@
   let app = $state<AppState | null>(null);
   let services = $state<ServiceInfo[]>([]);
   let loadError = $state<string | null>(null);
+  let pinVerified = $state(true);
   let notice = $state<{ kind: 'ok' | 'error'; text: string } | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   const labelTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** What's typed in a label field that has focus. Shown instead of the saved (trimmed) label. */
   let drafts = $state<Record<string, string>>({});
 
+  const pinAttention = $derived(import.meta.env.BROWSER === 'safari' && (!pinVerified || app?.pinError !== null)
+    ? safariPinFeedback(app?.prefs.pinEnabled ?? false, app?.pinError, pinVerified) : null);
   const rows = $derived(app ? lineup(app) : []);
   const active = $derived(rows.filter((r) => !r.inactive));
   // Same rule as the pin redirects: the first signed-in account in your order.
@@ -33,7 +36,7 @@
     (async () => {
       try {
         api = await getApi();
-        unsub = api.subscribe((s) => (app = s));
+        unsub = api.subscribe((s) => { app = s; pinVerified = true; });
         const [s, list] = await Promise.all([
           api.send({ type: 'getState' }),
           api.send({ type: 'listServices' }),
@@ -50,10 +53,15 @@
   async function save(patch: Partial<Prefs>) {
     if (!app || !api) return;
     app = { ...app, prefs: { ...app.prefs, ...patch } };
+    if (import.meta.env.BROWSER === 'safari') pinVerified = false;
     try {
       await api.send({ type: 'savePrefs', patch });
-      if (import.meta.env.BROWSER === 'safari') app = await api.send({ type: 'getState' });
+      if (import.meta.env.BROWSER === 'safari') {
+        app = await api.send({ type: 'getState' });
+        pinVerified = true;
+      }
     } catch (e) {
+      if (import.meta.env.BROWSER === 'safari') pinVerified = false;
       notice = { kind: 'error', text: errorText(e) };
     }
   }
@@ -240,7 +248,7 @@
         <div>
           <span class="strong" id="pin-l">Pin default account</span>
           <span class="muted small" id="pin-d">
-            {app.pinError ? 'Pin is paused. Your choices are saved.' : app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.'}
+            {pinAttention ?? (app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.')}
           </span>
         </div>
         <Toggle

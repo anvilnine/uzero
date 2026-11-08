@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { getApi, type Api } from '../../lib/api';
-  import { SAFARI_PRIVATE_LIMITATION } from '../../lib/safariPin';
+  import { SAFARI_PRIVATE_LIMITATION, safariPinFeedback } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
   import { inProgress } from '../../lib/wizard';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
@@ -25,6 +25,7 @@
   let api: Api | null = null;
   let app = $state<AppState | null>(readCache());
   let fatal = $state<string | null>(null);
+  let pinVerified = $state(true);
   let busy = $state(true);
   let tab = $state<{ serviceId: string | null; email: string | null } | null>(null);
   let services = $state<ServiceInfo[]>([]);
@@ -53,6 +54,8 @@
   );
   const canSwitch = $derived(!!tab?.serviceId);
   const statusError = $derived(app?.status.kind === 'error' ? app.status.message : null);
+  const pinAttention = $derived(import.meta.env.BROWSER === 'safari' && (!pinVerified || app?.pinError !== null)
+    ? safariPinFeedback(app?.prefs.pinEnabled ?? false, app?.pinError, pinVerified) : null);
   const activeCount = $derived(rows.filter((r) => !r.inactive).length);
   // Does Google's own /u/N order already match the user's order?
   const inSync = $derived(
@@ -69,6 +72,7 @@
     }
     queued = null;
     app = s;
+    pinVerified = true;
     fatal = null;
     writeCache(s);
   }
@@ -122,11 +126,13 @@
     if (!app || !api) return;
     app = { ...app, prefs: { ...app.prefs, ...patch } };
     writeCache(app);
+    if (import.meta.env.BROWSER === 'safari') pinVerified = false;
     try {
       await api.send({ type: 'savePrefs', patch });
       if (import.meta.env.BROWSER === 'safari') accept(await api.send({ type: 'getState' }));
       return true;
     } catch (e) {
+      if (import.meta.env.BROWSER === 'safari') pinVerified = false;
       say(errorText(e));
       return false;
     }
@@ -183,9 +189,9 @@
 
   async function togglePin(on: boolean) {
     const saved = await save({ pinEnabled: on });
-    announce = import.meta.env.BROWSER === 'safari' && !saved
-      ? 'Could not verify Pin. Reopen Uzero or refresh.'
-      : on && app?.pinError ? 'Pin is paused. Your choices are saved.' : on ? 'Pin is on.' : 'Pin is off.';
+    announce = import.meta.env.BROWSER === 'safari'
+      ? safariPinFeedback(app?.prefs.pinEnabled ?? on, app?.pinError, saved === true && pinVerified)
+      : on ? 'Pin is on.' : 'Pin is off.';
   }
 
   async function makeItReal() {
@@ -419,8 +425,8 @@
       <div class="pin-text">
         <span class="pin-title" id="pin-title">Pin default account</span>
         <span class="pin-desc" id="pin-desc">
-          {#if app.pinError}
-            Pin is paused. Your choices are saved.
+          {#if pinAttention}
+            {pinAttention}
           {:else if app.prefs.pinEnabled && first}
             Links without an account open as {first.meta.label ?? first.name}.
           {:else}
@@ -531,7 +537,7 @@
       {#if reorder}
         <p>
           {#if reorder.expired}
-            Reorder paused.{app.prefs.pinEnabled ? (app.pinError ? ' Pin is paused.' : ' Pin is back on.') : ''}
+            Reorder paused.{app.prefs.pinEnabled ? (pinAttention ? ' Pin needs attention.' : ' Pin is back on.') : ''}
           {:else}
             Reorder in progress.
           {/if}
