@@ -69,6 +69,16 @@ async function removeWindow(w: WizardState | null): Promise<void> {
 export function removeSafariGuide(wizard: WizardState | null, closeWindow = true): Promise<void> {
   return serial(async () => { await removeOverlay(wizard); if (closeWindow) await removeWindow(wizard); });
 }
+/** A removal event has no privacy metadata. Accept only our worker-tracked normal popup.
+ * This is presentation cleanup only, never a Google-tab/wizard cancellation event. */
+export function safariGuideTabRemoved(tabId: number): Promise<boolean> {
+  return serial(async () => {
+    if (pageTabId !== tabId) return false;
+    pageTabId = undefined;
+    await restorePlacement();
+    return true;
+  });
+}
 /** Reserve side-by-side space inside the normal browser window's existing footprint. */
 async function placement(w: WizardState): Promise<{ left: number; top: number; width: number; height: number } | undefined> {
   const tab = await normalTab(w.tabId);

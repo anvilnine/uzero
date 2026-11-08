@@ -9,7 +9,7 @@ import {
   SAFARI_PIN_UNAVAILABLE, LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
 } from '@/lib/dnr';
-import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, showSafariGuide } from '@/lib/safariGuide';
+import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, safariGuideTabRemoved, showSafariGuide } from '@/lib/safariGuide';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
 import { currentEmail, switchableServiceId, toAccount } from '@/lib/rewrite';
 import { ACCOUNT_HOSTS, SERVICES, serviceById, toServiceInfo } from '@/lib/services';
@@ -56,8 +56,15 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((cmd) => void onCommand(cmd));
   browser.tabs.onUpdated.addListener(onTabUpdated);
-  browser.tabs.onRemoved.addListener((tabId) => {
+  browser.tabs.onRemoved.addListener(async (tabId) => {
     if (IS_SAFARI) {
+      if (await safariGuideTabRemoved(tabId)) {
+        await wizardLock(async () => {
+          const w = await wizardItem.getValue();
+          if (w?.pageTabId === tabId) await wizardItem.setValue({ ...w, pageTabId: undefined });
+        });
+        return;
+      }
       // Only tabs previously observed in normal windows may drive a wizard or refresh.
       if (!accountsTabs.has(tabId) && !tabUrls.has(tabId)) return;
     }
