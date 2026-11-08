@@ -1,20 +1,26 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta charset="utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Uzero</title>
     <link rel="stylesheet" href="../Style.css">
     <script src="../Script.js" defer></script>
 </head>
 <body>
-    <img src="../Icon.png" width="128" height="128" alt="Uzero Icon">
-    <p class="platform-ios">You can turn on Uzero’s Safari extension in Settings.</p>
-    <p class="platform-mac state-unknown">You can turn on Uzero’s extension in Safari Extensions preferences.</p>
-    <p class="platform-mac state-on">Uzero’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
-    <p class="platform-mac state-off">Uzero’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
-    <button class="platform-mac open-preferences">Quit and Open Safari Extensions Preferences…</button>
+<main>
+    <img src="../Icon.png" width="96" height="96" alt="">
+    <h1>Uzero</h1>
+    <p class="purpose">Put your signed-in Google accounts in your order.</p>
+    <ol>
+        <li id="instructions">Open Safari settings, then Extensions and select Uzero.</li>
+        <li>Turn on Uzero. Allow access to the supported Google websites listed by Safari.</li>
+        <li>Open a Google page in Safari, then choose Uzero from Safari's extensions menu to see your accounts.</li>
+    </ol>
+    <button id="settings" type="button" hidden>Open Safari Extension Settings</button>
+    <p id="status" role="status" aria-live="polite">Turn on Uzero in Safari settings.</p>
+    <p class="note">Uzero reads your account list through an open Google page. It never reads your passwords.</p>
+</main>
 </body>
 </html>

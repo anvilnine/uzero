@@ -4,5 +4,9 @@
 <dict>
 	<key>SFSafariWebExtensionConverterVersion</key>
 	<string>27.2</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>CFBundleDisplayName</key>
+	<string>Uzero</string>
 </dict>
 </plist>
