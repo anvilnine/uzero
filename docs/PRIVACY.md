@@ -1,6 +1,6 @@
 # Uzero — Privacy Policy
 
-**Effective date:** 2026-11-05
+**Effective date:** 2026-11-09
 
 > **Short version.** Uzero runs only in your browser. We have no servers, so we never receive your data. Uzero talks only to Google, and only to do what you ask. It never sees your passwords.
 
@@ -92,13 +92,19 @@ Uzero's use of information received from Google follows the [Chrome Web Store Us
 
 Uzero is an independent project. It is not made, endorsed or supported by Google. Google, Gmail and Google Drive are trademarks of Google LLC.
 
-## 12. Changes to this policy
+## 12. Tips and purchases
+
+Uzero itself collects nothing, whether you pay or not. If you choose to tip through Gumroad, Polar or Ko-fi, that service handles your payment under its own privacy policy, and we never see your card details. The service shares your name, email address, country and the amount with us. We keep them only for tax records and refunds, and we never sell them or give them to anyone else. To see or delete what we hold, email [hello@anvilnine.com](mailto:hello@anvilnine.com).
+
+If you buy the Safari version on Apple's App Store, Apple handles the purchase under its own privacy policy and does not give us your name or email address.
+
+## 13. Changes to this policy
 
 If this policy changes, we update the effective date above and publish the new text with the extension's source. If a change gives Uzero new access to your data, we will tell you in the extension's release notes before it takes effect.
 
-## 13. Contact
+## 14. Contact
 
-Questions or requests: open an issue at [github.com/anvilnine/uzero/issues](https://github.com/anvilnine/uzero/issues). The source code is public there, so anyone can check what Uzero does.
+Questions or requests: email [hello@anvilnine.com](mailto:hello@anvilnine.com).
 
 ## Appendix: Google sites Uzero can access
 

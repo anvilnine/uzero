@@ -1,8 +1,8 @@
 # Uzero — Terms of Use
 
-**Effective date:** 2026-11-05
+**Effective date:** 2026-11-08
 
-> **Short version.** Uzero is free and comes "as is". You keep control of your Google accounts and passwords. A reorder signs you out of every Google account, so have your passwords and 2-Step Verification ready. If something goes wrong, our liability is limited as far as the law allows.
+> **Short version.** Uzero is free on Chrome, Edge and Firefox, and costs a small one-time price on Apple's App Store. Tips are optional and unlock nothing. Uzero comes "as is". You keep control of your Google accounts and passwords. A reorder signs you out of every Google account, so have your passwords and 2-Step Verification ready. If something goes wrong, our liability is limited as far as the law allows.
 
 These Terms are an agreement between you and anvilnine, the developer of Uzero ("we", "us"). They cover the Uzero browser extension, its updates and its documentation ("Uzero"). **When you install or use Uzero, you agree to these Terms.** If you do not agree, do not install or use Uzero.
 
@@ -69,13 +69,22 @@ Nothing in these Terms takes away rights that you have as a consumer under the l
 
 The law of the country where anvilnine has its principal place of business controls these Terms, without regard to its conflict-of-laws rules. This does not remove the protection of mandatory consumer laws where you live. Before any formal claim, contact us so we can try to solve the problem. Each party agrees to try to settle a dispute in good faith for 30 days first.
 
-## 14. General
+## 14. Prices, tips and refunds
+
+- **Browser stores.** Uzero is free on the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons. Every feature works without paying.
+- **App Store.** The Safari version for Mac, iPhone and iPad is sold on Apple's App Store for a one-time price. Apple sells it to you and handles payment, tax and refunds under Apple's own terms. To ask for a refund, use [reportaproblem.apple.com](https://reportaproblem.apple.com).
+- **Tips.** You can choose to support Uzero through Gumroad, Polar or Ko-fi, at any amount you pick. A tip is a voluntary payment to anvilnine, an independent developer. It is not a charitable donation and is not tax-deductible. It does not unlock features, faster support or any other benefit.
+- **Payment services.** Gumroad, Polar and Ko-fi process your payment under their own terms and privacy policies. We never see your card details.
+- **Tip refunds.** If you tipped by mistake, email [hello@anvilnine.com](mailto:hello@anvilnine.com) within 14 days and we will refund it. The payment service's own refund rules also apply.
+- **Your GPL-3.0 rights.** Paying does not add to your rights under the GPL-3.0, and not paying does not limit them.
+
+## 15. General
 
 - **Whole agreement:** these Terms and the Privacy Policy are the whole agreement between you and us about Uzero.
 - **Severability:** if a court finds part of these Terms invalid, the rest stays in effect.
 - **No waiver:** if we do not enforce a right, we have not given it up.
 - **Assignment:** you cannot transfer these Terms. We can transfer them if Uzero moves to a new owner.
 
-## 15. Contact
+## 16. Contact
 
-Questions: open an issue at [github.com/anvilnine/uzero/issues](https://github.com/anvilnine/uzero/issues).
+Questions: email [hello@anvilnine.com](mailto:hello@anvilnine.com).
