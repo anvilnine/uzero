@@ -1,81 +1,68 @@
-//
-//  ViewController.swift
-//  Shared (App)
-//
-//  Created by patricia on 11/7/26.
-//
-
 import WebKit
+import SafariServices
 
 #if os(iOS)
 import UIKit
 typealias PlatformViewController = UIViewController
 #elseif os(macOS)
 import Cocoa
-import SafariServices
 typealias PlatformViewController = NSViewController
 #endif
 
 let extensionBundleIdentifier = "app.uzero.Extension"
 
 class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMessageHandler {
-
     @IBOutlet var webView: WKWebView!
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        self.webView.navigationDelegate = self
-
+        webView.navigationDelegate = self
 #if os(iOS)
-        self.webView.scrollView.isScrollEnabled = false
+        webView.scrollView.isScrollEnabled = true
 #endif
-
-        self.webView.configuration.userContentController.add(self, name: "controller")
-
-        self.webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
+        webView.configuration.userContentController.add(self, name: "controller")
+        webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-#if os(iOS)
-        webView.evaluateJavaScript("show('ios')")
+#if os(iOS) && !targetEnvironment(macCatalyst)
+        if #available(iOS 26.2, *) {
+            webView.evaluateJavaScript("show('ios', null, true)")
+        } else {
+            webView.evaluateJavaScript("show('ios', null, false)")
+        }
 #elseif os(macOS)
-        webView.evaluateJavaScript("show('mac')")
-
-        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { (state, error) in
-            guard let state = state, error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
-
+        webView.evaluateJavaScript("show('mac', null, true)")
+        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { [weak self] state, error in
+            guard let state = state, error == nil else { return }
             DispatchQueue.main.async {
-                if #available(macOS 13, *) {
-                    webView.evaluateJavaScript("show('mac', \(state.isEnabled), true)")
-                } else {
-                    webView.evaluateJavaScript("show('mac', \(state.isEnabled), false)")
-                }
+                self?.webView.evaluateJavaScript("show('mac', \(state.isEnabled), true)")
             }
         }
 #endif
+    }
+
+    private func settingsCompleted(_ error: Error?) {
+        guard error != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.webView.evaluateJavaScript("settingsError()")
+        }
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.frameInfo.isMainFrame,
+              message.frameInfo.request.url?.isFileURL == true,
+              let action = message.body as? String, action == "open-preferences" else { return }
 #if os(macOS)
-        if (message.body as! String != "open-preferences") {
-            return
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { [weak self] error in
+            self?.settingsCompleted(error)
         }
-
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
-            guard error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
-
-            DispatchQueue.main.async {
-                NSApp.terminate(self)
+#elseif os(iOS) && !targetEnvironment(macCatalyst)
+        if #available(iOS 26.2, *) {
+            SFSafariSettings.openExtensionsSettings(forIdentifiers: [extensionBundleIdentifier]) { [weak self] error in
+                self?.settingsCompleted(error)
             }
         }
 #endif
     }
-
 }

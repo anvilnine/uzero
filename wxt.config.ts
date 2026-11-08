@@ -15,7 +15,7 @@ export default defineConfig({
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
     return {
-      name: 'Uzero — default account & order for Google',
+      name: browser === 'safari' ? 'Uzero' : 'Uzero — default account & order for Google',
       short_name: 'Uzero',
       description:
         'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',

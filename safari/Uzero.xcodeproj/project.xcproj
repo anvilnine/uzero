@@ -248,7 +248,7 @@
           "$(inherited)",
           "@executable_path/Frameworks",
         ],
-        "MARKETING_VERSION": "1.0",
+        "MARKETING_VERSION": "0.1.0",
         "OTHER_LDFLAGS": [
           "-framework",
           "SafariServices",
@@ -304,7 +304,7 @@
           "@executable_path/../Frameworks",
         ],
         "MACOSX_DEPLOYMENT_TARGET": "12.0",
-        "MARKETING_VERSION": "1.0",
+        "MARKETING_VERSION": "0.1.0",
         "OTHER_LDFLAGS": [
           "-framework",
           "SafariServices",
@@ -339,13 +339,13 @@
         "INFOPLIST_FILE": "iOS (Extension)/Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "Uzero Extension",
         "INFOPLIST_KEY_NSHumanReadableCopyright": "",
-        "IPHONEOS_DEPLOYMENT_TARGET": "15.0",
+        "IPHONEOS_DEPLOYMENT_TARGET": "17.0",
         "LD_RUNPATH_SEARCH_PATHS": [
           "$(inherited)",
           "@executable_path/Frameworks",
           "@executable_path/../../Frameworks",
         ],
-        "MARKETING_VERSION": "1.0",
+        "MARKETING_VERSION": "0.1.0",
         "OTHER_LDFLAGS": [
           "-framework",
           "SafariServices",
@@ -388,7 +388,7 @@
           "@executable_path/../../../../Frameworks",
         ],
         "MACOSX_DEPLOYMENT_TARGET": "12.0",
-        "MARKETING_VERSION": "1.0",
+        "MARKETING_VERSION": "0.1.0",
         "OTHER_LDFLAGS": [
           "-framework",
           "SafariServices",
