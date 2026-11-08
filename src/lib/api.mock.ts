@@ -1,6 +1,6 @@
 // Fake background for design review in a plain browser tab.
 // Scenarios via query string, e.g. popup.html?mock=error
-//   mock = loading | empty | error | signing-out | signing-in | wrong-account | tab-closed | expired | done
+//   mock = loading | empty | error | signing-out | signing-in | wrong-account | tab-closed | expired | done | done-ok
 //          | in-progress (popup: a reorder is running)
 //   tab  = none (active tab is not a Google page)
 import type { Api } from './api';
@@ -188,6 +188,14 @@ function presetWizard(): WizardState | null {
         return { ...a, index: i, signedOut: i < 0 };
       });
       return { ...base, phase: 'done', current: 4, completed: finalOrder, tabId: 7 };
+    }
+    case 'done-ok': {
+      // Every account came back in your order.
+      state.accounts = state.accounts.map((a) => {
+        const i = queue.indexOf(a.email);
+        return { ...a, index: i, signedOut: i < 0 };
+      });
+      return { ...base, phase: 'done', current: 4, completed: [...queue], tabId: 7 };
     }
     default:
       return null;
