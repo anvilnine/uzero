@@ -195,3 +195,34 @@ it('removes an overlay on cancel and clears wizard state', async () => {
   expect(remove).toHaveBeenCalledWith(10, { type: 'safariGuideRemove' }, { frameId: 0 });
   expect(await wizardItem.getValue()).toBeNull();
 });
+
+it.each(['untouched', 'moved', 'resized'])('native guide close restores only untouched geometry (%s) without cancelling Google', async change => {
+  const source = { id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 1000, height: 800 };
+  vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([source] as any);
+  vi.spyOn(fakeBrowser.windows, 'get').mockImplementation(async () => ({ ...source }) as any);
+  const update = vi.spyOn(fakeBrowser.windows, 'update').mockImplementation(async (_id, patch) => { Object.assign(source, patch); return { ...source } as any; });
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 22, incognito: false, tabs: [{ id: 23 }] } as any);
+  await send({ type: 'wizardOpen', queue: [account.email] });
+  expect(source.width).toBe(640);
+  const w = { ...(await wizardItem.getValue())!, phase: 'signing-in' as const, tabId: 10 };
+  await wizardItem.setValue(w);
+  if (change === 'moved') source.left = 120;
+  if (change === 'resized') source.width = 700;
+  update.mockClear();
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove');
+  // No onUpdated observation for the owned extension page, and no privacy in removal events.
+  await fakeBrowser.tabs.onRemoved.trigger(23, { windowId: 22, isWindowClosing: true });
+  await vi.waitFor(async () => expect((await wizardItem.getValue())?.pageTabId).toBeUndefined());
+  expect(await wizardItem.getValue()).toEqual({ ...w, pageTabId: undefined });
+  expect(remove).not.toHaveBeenCalled();
+  if (change !== 'untouched') expect(update).not.toHaveBeenCalled();
+  else expect(update).toHaveBeenCalledWith(1, { width: 1000 });
+});
+
+it('unobserved non-guide removals cannot mutate the Safari wizard', async () => {
+  const w = { phase: 'signing-in' as const, queue: [account.email], current: 0, completed: [], startedAt: Date.now(), tabId: 99, pageTabId: 98 };
+  await wizardItem.setValue(w);
+  await fakeBrowser.tabs.onRemoved.trigger(99, { windowId: 4, isWindowClosing: true });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  expect(await wizardItem.getValue()).toEqual(w);
+});
