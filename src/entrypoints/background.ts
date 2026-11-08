@@ -56,9 +56,9 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((cmd) => void onCommand(cmd));
   browser.tabs.onUpdated.addListener(onTabUpdated);
-  browser.tabs.onRemoved.addListener(async (tabId) => {
+  browser.tabs.onRemoved.addListener(async (tabId, info) => {
     if (IS_SAFARI) {
-      if (await safariGuideTabRemoved(tabId)) {
+      if (await safariGuideTabRemoved(tabId, info.windowId)) {
         await wizardLock(async () => {
           const w = await wizardItem.getValue();
           if (w?.pageTabId === tabId) await wizardItem.setValue({ ...w, pageTabId: undefined });
@@ -482,12 +482,17 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
 /** Presentation failures are visible, but never roll back an already completed Google step. */
 async function syncSafariGuide(prev: WizardState | null, next: WizardState | null): Promise<void> {
   try {
-    if (!next || (next.phase !== 'confirm' && !guideRunning(next))) {
+    const mode = (await prefsItem.getValue()).safariGuideMode;
+    // A recovery page can show Retry after explicit reopen. Overlay eligibility stays strict.
+    // Entering expiry/tab-closed still tears down presentation; stable errors never create it.
+    const recoveryPage = mode === 'window' && next?.phase === 'error' && prev?.phase === 'error'
+      && prev.errorKind === next.errorKind;
+    if (!next || (next.phase !== 'confirm' && !guideRunning(next) && !recoveryPage)) {
       await removeSafariGuide(prev);
       return;
     }
     if (prev?.tabId !== undefined && prev.tabId !== next.tabId) await removeSafariGuide(prev, false);
-    await showSafariGuide((await prefsItem.getValue()).safariGuideMode, next);
+    await showSafariGuide(mode, next);
   } catch (e) {
     await statusItem.setValue({ kind: 'error', message: `Safari guide: ${errorMessage(e)}. Reopen the reorder from Uzero.`, at: Date.now() });
   }

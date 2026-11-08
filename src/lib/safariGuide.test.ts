@@ -123,3 +123,81 @@ it('does not restore geometry after the user moves or resizes the source window'
   await guide.removeSafariGuide(active());
   expect(fakeBrowser.windows.update).not.toHaveBeenCalled();
 });
+
+it.each(['native', 'remove', 'deduplicate'])('hydrates session-owned guide before %s after worker retirement', async action => {
+  const source = { id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 1000, height: 800 };
+  vi.mocked(fakeBrowser.windows.get).mockImplementation(async () => ({ ...source }) as any);
+  const update = vi.mocked(fakeBrowser.windows.update).mockImplementation(async (_id, patch) => { Object.assign(source, patch); return { ...source } as any; });
+  const create = vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  await guide.showSafariGuide('window', active(), true);
+  vi.mocked(fakeBrowser.tabs.get).mockImplementation(async id => id === 20 ? { id: 20, windowId: 2, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window' } as any : normal as any);
+  vi.resetModules(); guide = await import('./safariGuide');
+  update.mockClear();
+  if (action === 'deduplicate') {
+    expect(await guide.showSafariGuide('window', active(), true)).toBe(20);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(source.width).toBe(640);
+  } else {
+    if (action === 'native') expect(await guide.safariGuideTabRemoved(20, 2)).toBe(true);
+    else await guide.removeSafariGuide(active());
+    expect(update).toHaveBeenCalledWith(1, { width: 1000 });
+    expect((await fakeBrowser.storage.session.get('safariGuidePresentation')).safariGuidePresentation).toBeUndefined();
+    if (action === 'native') expect(remove).not.toHaveBeenCalled();
+    else expect(remove).toHaveBeenCalledWith(20);
+  }
+});
+
+it.each([
+  null,
+  { version: 2 },
+  { incognito: true },
+  { incognito: undefined },
+  { tabId: -1 },
+  { tabId: '20' },
+  { windowId: NaN },
+  { url: 'https://accounts.google.com/' },
+  { reserved: { id: 1, left: 100, top: 50, width: 1000, height: 800, appliedWidth: 700 } },
+  { reserved: { id: 1, left: 100, top: 50, width: 1000, height: -1, appliedWidth: 640 } },
+])('rejects malformed/private session ownership without native-close effects (%j)', async patch => {
+  const valid = { version: 1, tabId: 20, windowId: 2, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window', reserved: { id: 1, left: 100, top: 50, width: 1000, height: 800, appliedWidth: 640 } };
+  await fakeBrowser.storage.session.set({ safariGuidePresentation: patch === null ? null : { ...valid, ...patch } });
+  vi.resetModules(); guide = await import('./safariGuide');
+  vi.mocked(fakeBrowser.windows.get).mockResolvedValue({ id: 1, incognito: false, type: 'normal', left: 100, top: 50, width: 640, height: 800 } as any);
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  expect(await guide.safariGuideTabRemoved(20, 2)).toBe(false);
+  expect(fakeBrowser.windows.update).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it.each([true, undefined])('restoration after retirement requires explicitly normal source privacy (%s)', async incognito => {
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  await guide.showSafariGuide('window', active(), true);
+  vi.resetModules(); guide = await import('./safariGuide');
+  vi.mocked(fakeBrowser.windows.get).mockResolvedValue({ id: 1, incognito, type: 'normal', left: 100, top: 50, width: 640, height: 800 } as any);
+  vi.mocked(fakeBrowser.windows.update).mockClear();
+  await guide.safariGuideTabRemoved(20, 2);
+  expect(fakeBrowser.windows.update).not.toHaveBeenCalled();
+});
+
+it('does not accept a native close from a different window after retirement', async () => {
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  await guide.showSafariGuide('window', active(), true);
+  vi.resetModules(); guide = await import('./safariGuide');
+  vi.mocked(fakeBrowser.windows.update).mockClear();
+  expect(await guide.safariGuideTabRemoved(20, 3)).toBe(false);
+  expect(fakeBrowser.windows.update).not.toHaveBeenCalled();
+});
+
+it.each([
+  { incognito: true }, { incognito: undefined }, { url: 'https://example.com/' },
+  { pendingUrl: 'https://example.com/' }, { windowId: 3 },
+])('never closes a no-longer-owned guide tab after retirement (%j)', async patch => {
+  vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({ id: 2, incognito: false, tabs: [{ id: 20 }] } as any);
+  await guide.showSafariGuide('window', active(), true);
+  vi.resetModules(); guide = await import('./safariGuide');
+  vi.mocked(fakeBrowser.tabs.get).mockResolvedValue({ id: 20, windowId: 2, incognito: false, url: fakeBrowser.runtime.getURL('/reorder.html') + '?guide=window', ...patch } as any);
+  const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined);
+  await guide.removeSafariGuide(active());
+  expect(remove).not.toHaveBeenCalled();
+});

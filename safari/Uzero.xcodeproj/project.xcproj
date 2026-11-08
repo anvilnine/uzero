@@ -99,6 +99,12 @@
                 "Uzero Extension (macOS)/resources",
               ],
             }, {
+              "path": "Resources/content-scripts",
+              "target-membership": [
+                "Uzero Extension (iOS)/resources",
+                "Uzero Extension (macOS)/resources",
+              ],
+            }, {
               "path": "Resources/manifest.json",
               "target-membership": [
                 "Uzero Extension (iOS)/resources",
