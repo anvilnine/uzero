@@ -31,3 +31,7 @@ design/icon/round*/
 
 # Icon generator scratch (branding/ holds the finished sets)
 icon-base/
+
+# Local agent workspaces and private planning notes
+.superpowers/
+.claude/
