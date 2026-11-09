@@ -28,3 +28,7 @@ web-ext.config.ts
 
 # Icon exploration renders (large; kept locally)
 design/icon/round*/
+
+# Local agent workspaces and private planning notes
+.superpowers/
+.claude/
