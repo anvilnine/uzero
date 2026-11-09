@@ -17,7 +17,7 @@ export default defineConfig({
       short_name: 'Uzero',
       description:
         'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
-      homepage_url: 'https://github.com/anvilnine/uzero',
+      homepage_url: 'https://uzero.app',
       // Never runs in private windows, so it never sees or changes their Google sessions.
       incognito: 'not_allowed',
       permissions: [

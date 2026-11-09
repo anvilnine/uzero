@@ -217,6 +217,8 @@ Bug reports and ideas are welcome in [issues](https://github.com/anvilnine/uzero
 
 [GPL-3.0](LICENSE). You may use, change and share the code, as long as shared versions stay open under the same license.
 
+Made by [Anvil Nine](https://anvilnine.com).
+
 ## Credits
 
 Based in part on [authusher](https://github.com/zzjjaayy/authusher-default-google-account-extension) (MIT), with ideas from [authpin](https://github.com/emretepedev/authpin-for-google), [account-switcher-for-google](https://github.com/piro0919/account-switcher-for-google) and [default.wtf](https://github.com/uptechteam/default.wtf). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
