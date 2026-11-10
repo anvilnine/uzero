@@ -4,7 +4,6 @@
     FEEDBACK_URL,
     REVIEW_URLS,
     SITE_URL,
-    SHARE_TEXT,
     STORE_NAMES,
     detectStore,
     dismiss,
@@ -17,6 +16,7 @@
     shouldAsk,
     type AskState,
   } from '../lib/ask';
+  import { EMPTY_STATS, loadStats, shareText } from '../lib/stats';
 
   /** Shown on the reorder "done" screen when Google's order matches. Never in the Safari build. */
   let ask = $state<AskState | null>(null);
@@ -34,10 +34,13 @@
     version,
     locale: typeof navigator === 'undefined' ? undefined : navigator.language,
   });
-  const shares = shareLinks();
+  const locale = typeof navigator === 'undefined' ? undefined : navigator.language;
+  let text = $state(shareText(EMPTY_STATS));
+  const shares = $derived(shareLinks(SITE_URL, text));
   const path = $derived(rating ? route(rating) : null);
 
   onMount(async () => {
+    text = shareText(await loadStats(), locale);
     ask = await loadAsk();
     asking = shouldAsk(ask, Date.now());
   });
@@ -58,7 +61,7 @@
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(`${SHARE_TEXT} ${SITE_URL}`);
+      await navigator.clipboard.writeText(`${text} ${SITE_URL}`);
       copied = true;
       setTimeout(() => (copied = false), 1500);
     } catch {

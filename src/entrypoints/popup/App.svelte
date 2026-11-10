@@ -9,6 +9,7 @@
   import Icon from '../../ui/Icon.svelte';
   import Toggle from '../../ui/Toggle.svelte';
   import AccountSheet from './AccountSheet.svelte';
+  import { loadStats, pinLine } from '../../lib/stats';
   import {
     cleanLabel,
     lineup,
@@ -72,8 +73,11 @@
     writeCache(s);
   }
 
+  let pinCount = $state<string | null>(null);
+
   onMount(() => {
     let unsub = () => {};
+    void loadStats().then((s) => (pinCount = pinLine(s, navigator.language)));
     if (typeof browser !== 'undefined' && browser.windows) {
       browser.windows.getCurrent().then((w) => (windowId = w.id), () => {});
     }
@@ -408,6 +412,7 @@
         <span class="pin-desc" id="pin-desc">
           {#if app.prefs.pinEnabled && first}
             Links without an account open as {first.meta.label ?? first.name}.
+            {#if pinCount}<span class="pin-count">{pinCount}</span>{/if}
           {:else}
             Google picks the account for links.
           {/if}
@@ -652,6 +657,10 @@
     color: var(--on-surface-variant);
     font-size: var(--t-sm);
     line-height: 16px;
+  }
+  .pin-count {
+    display: block;
+    margin-top: 2px;
   }
 
   .banner {

@@ -8,6 +8,7 @@
   import { COLOR_NAMES, LABEL_COLORS, LABEL_MAX, cleanLabel, lineup, toneOf } from '../../ui/model';
   import { errorText } from '../../ui/nav';
   import { exportPrefs, parsePrefs } from '../../ui/prefsFile';
+  import { EMPTY_STATS, loadStats, saveStats, statRows, type Stats } from '../../lib/stats';
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
@@ -18,6 +19,9 @@
   const labelTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** What's typed in a label field that has focus. Shown instead of the saved (trimmed) label. */
   let drafts = $state<Record<string, string>>({});
+  let stats = $state<Stats>({ ...EMPTY_STATS });
+  const locale = typeof navigator === 'undefined' ? undefined : navigator.language;
+  const statList = $derived(statRows(stats, locale));
 
   const rows = $derived(app ? lineup(app) : []);
   const active = $derived(rows.filter((r) => !r.inactive));
@@ -29,6 +33,7 @@
 
   onMount(() => {
     let unsub = () => {};
+    void loadStats().then((s) => (stats = s));
     (async () => {
       try {
         api = await getApi();
@@ -45,6 +50,12 @@
     })();
     return () => unsub();
   });
+
+  async function resetStats() {
+    if (!confirm('Set your numbers back to zero?')) return;
+    stats = { ...EMPTY_STATS };
+    await saveStats(stats);
+  }
 
   async function save(patch: Partial<Prefs>) {
     if (!app || !api) return;
@@ -302,6 +313,28 @@
         </div>
       </section>
     {/if}
+
+    <section class="card stats" aria-labelledby="h-stats">
+      <div class="card-head">
+        <h2 id="h-stats">Your numbers</h2>
+        <p>Uzero counts these on this computer and never sends them anywhere.</p>
+      </div>
+      {#if statList.length}
+        <dl>
+          {#each statList as row (row.id)}
+            <div>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          {/each}
+        </dl>
+        <div class="actions">
+          <button type="button" class="btn btn-text" onclick={resetStats}>Reset numbers</button>
+        </div>
+      {:else}
+        <p class="pad muted">Nothing yet. Once Pin opens a link or you switch a tab, the count starts here.</p>
+      {/if}
+    </section>
 
     <section class="card" aria-labelledby="h-backup">
       <div class="card-head">
@@ -567,6 +600,26 @@
     color: var(--error);
   }
 
+  /* Your numbers -------------------------------------------------------- */
+  .stats dl {
+    margin: 0;
+  }
+  .stats dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--outline-variant);
+  }
+  .stats dd {
+    color: var(--on-surface);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .stats .actions {
+    padding-top: 8px;
+  }
+
   /* How it works -------------------------------------------------------- */
   .how dl {
     margin: 0;
@@ -604,7 +657,8 @@
     }
     .card-head,
     .pin-row,
-    .how dl > div {
+    .how dl > div,
+    .stats dl > div {
       padding-left: 16px;
       padding-right: 16px;
     }
