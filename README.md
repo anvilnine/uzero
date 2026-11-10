@@ -198,7 +198,7 @@ Built with [WXT](https://wxt.dev), [Svelte 5](https://svelte.dev) and TypeScript
 | Chrome build | `pnpm build` → `.output/chrome-mv3` |
 | Firefox build | `pnpm build:firefox` → `.output/firefox-mv3` |
 | Design preview with fake data | `pnpm build:preview` |
-| Store zips | `pnpm zip` / `pnpm zip:firefox` |
+| Store zips | `pnpm zip` / `pnpm zip:edge` / `pnpm zip:firefox` |
 | Tests | `pnpm test` |
 | Type checks | `pnpm typecheck` and `pnpm check` |
 
@@ -208,6 +208,23 @@ src/
   entrypoints/  background, popup, options, reorder page, side panel
   ui/           shared Svelte components and design tokens
 ```
+
+### Versions and releases
+
+Uzero follows [semantic versioning](https://semver.org). The `version` in `package.json` is the only place a version lives. WXT copies it into every browser manifest, and the Safari build script copies it into the Xcode project.
+
+Every push and pull request runs the CI workflow: type checks, Svelte checks, tests and a build for Chrome, Edge and Firefox.
+
+To cut a release from an up-to-date `main`:
+
+```
+pnpm release patch          # or minor, major, or an exact version such as 1.2.0
+pnpm release minor --dry-run
+```
+
+The script bumps `package.json`, commits `chore: release vX.Y.Z`, tags `vX.Y.Z` and pushes both. The tag starts the Release workflow. It runs CI again, checks that the tag matches `package.json`, builds the store zips and publishes a [GitHub release](https://github.com/anvilnine/uzero/releases) with notes grouped from the commit messages. A tag with a suffix such as `v1.2.0-beta.1` becomes a pre-release.
+
+Commit messages use [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `docs:`, `chore:`) so the release notes can group them.
 
 ## Contributing
 

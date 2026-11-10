@@ -11,6 +11,7 @@
   },
   "bugs": "https://github.com/anvilnine/uzero/issues",
   "type": "module",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox --mv3",
@@ -22,7 +23,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "postinstall": "wxt prepare",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "zip:edge": "wxt zip -b edge",
+    "release": "scripts/release.sh"
   },
   "devDependencies": {
     "@tsconfig/svelte": "^5.0.8",
