@@ -17,8 +17,10 @@ export default defineConfig({
     return {
       name: browser === 'safari' ? 'Uzero' : 'Uzero — default account & order for Google',
       short_name: 'Uzero',
-      description:
-        'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
+      // App Store Connect rejects a Safari manifest description over 112 characters.
+      description: browser === 'safari'
+        ? 'Choose your default Google account and the order of your signed-in Google accounts.'
+        : 'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
       homepage_url: 'https://github.com/anvilnine/uzero',
       // Never runs in private windows, so it never sees or changes their Google sessions.
       incognito: 'not_allowed',

@@ -241,6 +241,7 @@
         "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "1",
+        "DEVELOPMENT_TEAM": "N358LNAWS2",
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_FILE": "iOS (App)/Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "Uzero",
@@ -296,6 +297,7 @@
         "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "1",
+        "DEVELOPMENT_TEAM": "N358LNAWS2",
         "ENABLE_APP_SANDBOX": "YES",
         "ENABLE_HARDENED_RUNTIME": "YES",
         "ENABLE_OUTGOING_NETWORK_CONNECTIONS": "YES",
@@ -303,6 +305,7 @@
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_FILE": "macOS (App)/Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "Uzero",
+        "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.productivity",
         "INFOPLIST_KEY_NSMainStoryboardFile": "Main",
         "INFOPLIST_KEY_NSPrincipalClass": "NSApplication",
         "LD_RUNPATH_SEARCH_PATHS": [
@@ -341,6 +344,7 @@
       "build-settings": {
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "1",
+        "DEVELOPMENT_TEAM": "N358LNAWS2",
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_FILE": "iOS (Extension)/Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "Uzero Extension",
@@ -381,6 +385,7 @@
       "build-settings": {
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "1",
+        "DEVELOPMENT_TEAM": "N358LNAWS2",
         "ENABLE_APP_SANDBOX": "YES",
         "ENABLE_HARDENED_RUNTIME": "YES",
         "ENABLE_USER_SELECTED_FILES": "readonly",
