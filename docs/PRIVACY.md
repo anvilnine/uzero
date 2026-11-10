@@ -1,6 +1,6 @@
 # Uzero Privacy Policy
 
-**Effective date:** 2026-11-05
+**Effective date:** 2026-11-10
 
 > **Short version.** Uzero runs only in your browser. We have no servers, so we never receive your data. Uzero talks only to Google, and only to do what you ask. It never sees your passwords.
 
@@ -15,6 +15,7 @@ Uzero uses only the data it needs to show and order your Google accounts.
 | Email, name, profile photo link and sign-in position of each Google account that is signed in to your browser | Google, at `accounts.google.com` | To show your accounts and their order |
 | Google tab addresses | Your browser | Switch a tab when you ask. In Safari, find a normal Google tab for account-list requests and the reorder guide. |
 | Your order, labels, colors and settings | You | To remember your choices |
+| Counts of what Uzero did for you: links Pin opened, tabs you switched, reorders you finished | Uzero, as you use it | To show you these numbers in Uzero's settings |
 
 Uzero does **not** use or collect:
 - passwords, 2-Step Verification codes, or any other sign-in secret;
@@ -28,7 +29,7 @@ Safari exposes tab addresses through its `tabs` permission. Uzero checks them to
 
 All data stays **on your device**, in the browser's own extension storage:
 
-- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list. The popup keeps one more copy of that list in its own page storage, so it opens fast.
+- **Kept until you remove it:** your order, labels, colors, settings, the counts listed above, and a copy of the account list. The popup keeps one more copy of that list in its own page storage, so it opens fast.
 - **Deleted when the browser closes:** the progress of a reorder, and short-term status.
 
 We have no servers, no database and no account system. **We never receive a copy of your data, so we cannot see, sell or share it.**
@@ -76,6 +77,7 @@ The exact Google sites Uzero can access are listed in the appendix below.
 
 Your data stays until you delete it. To delete all of it:
 - **Remove one label or color:** change it in Uzero's settings.
+- **Clear the counts:** press "Reset numbers" in Uzero's settings.
 - **Delete everything:** uninstall Uzero. The browser deletes all of Uzero's storage.
 
 We hold no copy, so there is nothing for us to delete.

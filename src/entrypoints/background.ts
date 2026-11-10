@@ -11,6 +11,7 @@ import {
 } from '@/lib/dnr';
 import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, showSafariGuide } from '@/lib/safariGuide';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
+import { STATS_KEY, bump, sanitizeStats, type Counter } from '@/lib/stats';
 import { currentEmail, switchableServiceId, toAccount } from '@/lib/rewrite';
 import { ACCOUNT_HOSTS, SERVICES, serviceById, toServiceInfo } from '@/lib/services';
 import {
@@ -84,6 +85,7 @@ const prefsLock = serial();
 const wizardLock = serial();
 const rulesLock = serial();
 const loopLock = serial();
+const statsLock = serial();
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -96,6 +98,18 @@ function hostOf(url: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** Add to the on-device totals (see lib/stats.ts). A failed write is dropped: counts are a nicety. */
+function countStats(add: Partial<Record<Counter, number>>): Promise<void> {
+  return statsLock(async () => {
+    try {
+      const got = await browser.storage.local.get(STATS_KEY);
+      await browser.storage.local.set({ [STATS_KEY]: bump(sanitizeStats(got[STATS_KEY]), add, Date.now()) });
+    } catch {
+      // Storage full or unavailable.
+    }
+  });
 }
 
 async function getState(): Promise<AppState> {
@@ -242,6 +256,7 @@ async function checkLoop(tabId: number, prev: string | undefined, url: string): 
   const { hits, loop } = recordHit(loopHits.get(key) ?? [], Date.now());
   if (!loop) {
     loopHits.set(key, hits);
+    void countStats({ pinnedLinks: 1 });
     return;
   }
   loopHits.delete(key);
@@ -395,7 +410,10 @@ async function switchActiveTab(email: string): Promise<ResponseMap['switchActive
   if (index === undefined) return { ok: false, reason: 'That account is not signed in.' };
   const url = toAccount(tab.url, index);
   if (!url) return { ok: false, reason: 'Uzero cannot switch this page.' };
-  if (url !== tab.url) await browser.tabs.update(tab.id, { url });
+  if (url !== tab.url) {
+    await browser.tabs.update(tab.id, { url });
+    void countStats({ tabSwitches: 1 });
+  }
   return { ok: true };
 }
 
@@ -461,6 +479,7 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     if (next && isActive(next)) next = { ...next, lastActivityAt: now };
     next = await wizardEffects(prev, next, !!opts.reopen);
     await wizardItem.setValue(next);
+    if (next?.phase === 'done' && prev?.phase !== 'done') void countStats({ reorders: 1, accountsReordered: next.completed.length });
     if (IS_SAFARI) await syncSafariGuide(prev, next);
     if (isActive(prev) !== isActive(next)) void syncRules();
     if (isActive(next)) {
