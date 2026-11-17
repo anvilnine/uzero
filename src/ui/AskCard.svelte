@@ -4,7 +4,6 @@
     FEEDBACK_URL,
     REVIEW_URLS,
     SITE_URL,
-    SHARE_TEXT,
     STORE_NAMES,
     detectStore,
     dismiss,
@@ -18,6 +17,7 @@
   } from '../lib/ask';
   import { formLink, pageContext } from '../lib/feedback';
   import Stars from './Stars.svelte';
+  import { EMPTY_STATS, loadStats, shareText } from '../lib/stats';
 
   /** Shown on the reorder "done" screen when Google's order matches. */
   let ask = $state<AskState | null>(null);
@@ -28,10 +28,13 @@
   const store = detectStore(import.meta.env.BROWSER, typeof navigator === 'undefined' ? '' : navigator.userAgent);
   const reviewUrl = store ? REVIEW_URLS[store] : '';
   const feedbackUrl = formLink(FEEDBACK_URL, pageContext('reorder-done'));
-  const shares = shareLinks();
+  const locale = typeof navigator === 'undefined' ? undefined : navigator.language;
+  let text = $state(shareText(EMPTY_STATS));
+  const shares = $derived(shareLinks(SITE_URL, text));
   const path = $derived(rating ? route(rating) : null);
 
   onMount(async () => {
+    text = shareText(await loadStats(), locale);
     ask = await loadAsk();
     asking = shouldAsk(ask, Date.now());
   });
@@ -52,7 +55,7 @@
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(`${SHARE_TEXT} ${SITE_URL}`);
+      await navigator.clipboard.writeText(`${text} ${SITE_URL}`);
       copied = true;
       setTimeout(() => (copied = false), 1500);
     } catch {
@@ -98,9 +101,6 @@
     <div class="row">
       <a class="btn btn-filled" href={feedbackUrl || 'https://uzero.app/support/'} target="_blank" rel="noreferrer">Send feedback</a>
     </div>
-    {#if reviewUrl && store}
-      <a class="quiet" href={reviewUrl} target="_blank" rel="noreferrer">Review on the {STORE_NAMES[store]} anyway</a>
-    {/if}
   </section>
 {:else if ask && ask.rating && ask.rating >= 4}
   <!-- Already rated happy on an earlier reorder: share only, no question. -->
