@@ -1,0 +1,129 @@
+name: Submit to stores
+
+# Uploads a release's zips to the Chrome Web Store, Firefox Add-ons and Edge Add-ons,
+# then submits them for review. The Release workflow calls this after each vX.Y.Z tag.
+# Run it by hand (Actions > Submit to stores) to resend one store or to dry-run.
+#
+# A store is skipped when its secrets are missing, so this is safe to merge before
+# every key exists. docs/RELEASING.md lists the secrets and where to get them.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v0.1.4
+        type: string
+        required: true
+      store:
+        description: Which store
+        type: choice
+        options: [all, chrome, firefox, edge]
+        default: all
+      dry_run:
+        description: Check the keys only, upload nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submit-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: ${{ matrix.store }}
+    runs-on: ubuntu-latest
+    # The stores environment holds the secrets. Add required reviewers to it to
+    # approve each submission by hand.
+    environment: stores
+    strategy:
+      fail-fast: false
+      matrix:
+        store: [chrome, firefox, edge]
+    steps:
+      - name: Pick stores
+        id: pick
+        env:
+          WANT: ${{ inputs.store || 'all' }}
+          STORE: ${{ matrix.store }}
+          CHROME_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          FIREFOX_KEY: ${{ secrets.FIREFOX_JWT_SECRET }}
+          EDGE_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          run=true
+          if [ "$WANT" != all ] && [ "$WANT" != "$STORE" ]; then run=false; fi
+          case "$STORE" in
+            chrome) key="$CHROME_KEY";; firefox) key="$FIREFOX_KEY";; edge) key="$EDGE_KEY";;
+          esac
+          if [ "$run" = true ] && [ -z "$key" ]; then
+            echo "::warning::No $STORE secrets in the stores environment. Skipping $STORE."
+            run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.pick.outputs.run == 'true'
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: pnpm/action-setup@v4
+        if: steps.pick.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.pick.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.pick.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the release zips
+        if: steps.pick.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p dist
+          gh release download "$TAG" --dir dist --pattern '*.zip' --pattern 'SHA256SUMS.txt'
+          cd dist && sha256sum -c SHA256SUMS.txt
+          v="${TAG#v}"
+          echo "ZIP_CHROME=dist/uzero-$v-chrome.zip" >> "$GITHUB_ENV"
+          echo "ZIP_FIREFOX=dist/uzero-$v-firefox.zip" >> "$GITHUB_ENV"
+          echo "ZIP_SOURCES=dist/uzero-$v-sources.zip" >> "$GITHUB_ENV"
+          echo "ZIP_EDGE=dist/uzero-$v-edge.zip" >> "$GITHUB_ENV"
+          node scripts/changelog.mjs "$v" --amo > dist/amo.json
+
+      - name: Chrome Web Store
+        if: steps.pick.outputs.run == 'true' && matrix.store == 'chrome'
+        env:
+          CHROME_API_VERSION: v2
+          CHROME_EXTENSION_ID: ${{ vars.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          CHROME_CANCEL_PENDING: 'true'
+        run: pnpm exec wxt submit --chrome-zip "$ZIP_CHROME" ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Firefox Add-ons
+        if: steps.pick.outputs.run == 'true' && matrix.store == 'firefox'
+        env:
+          FIREFOX_EXTENSION_ID: uzero@anvilnine
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+        run: |
+          pnpm exec wxt submit --firefox-zip "$ZIP_FIREFOX" --firefox-sources-zip "$ZIP_SOURCES" \
+            --firefox-amo-metadata-file dist/amo.json ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Edge Add-ons
+        if: steps.pick.outputs.run == 'true' && matrix.store == 'edge'
+        env:
+          EDGE_PRODUCT_ID: ${{ vars.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: pnpm exec wxt submit --edge-zip "$ZIP_EDGE" ${{ inputs.dry_run && '--dry-run' || '' }}
