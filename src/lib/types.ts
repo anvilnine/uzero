@@ -116,6 +116,11 @@ export interface WizardState {
    * (e.g. Chrome sync's own account). They count as already present and are never asked for.
    */
   kept?: string[];
+  /**
+   * Emails the user typed in before starting that Google did not list. Each is placed in the
+   * saved order at its spot once it signs in.
+   */
+  added?: string[];
   /** Id of the Google tab the wizard opened, if any. */
   tabId?: number;
   /** Id of the reorder.html tab, so "Make it real" can focus it instead of opening another. */

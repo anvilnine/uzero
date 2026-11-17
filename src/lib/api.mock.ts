@@ -1,6 +1,7 @@
 // Fake background for design review in a plain browser tab.
 // Scenarios via query string, e.g. popup.html?mock=error
 //   mock = loading | empty | error | confirm | signing-out | signing-in | wrong-account | tab-closed | expired | done | done-ok
+//          | signing-in-new (reorder: the sign-in step for an email typed in before starting)
 //          | in-progress (popup: a reorder is running)
 //   tab  = none (active tab is not a Google page)
 import type { Api } from './api';
@@ -132,6 +133,10 @@ function advance() {
   if (w.phase === 'signing-in') {
     const email = w.queue[w.current]!;
     const nextIndex = signedInOrder().length;
+    // A typed-in email shows up in Google's list once it signs in.
+    if (!state.accounts.some((a) => a.email === email)) {
+      state.accounts = [...state.accounts, { email, name: '', photo: '', index: -1, signedOut: true }];
+    }
     state.accounts = state.accounts.map((a) =>
       a.email === email ? { ...a, index: nextIndex, signedOut: false } : a,
     );
@@ -146,6 +151,8 @@ function advance() {
   }
 }
 
+const NEW_EMAIL = 'new@example.com';
+
 /** Before starting, the list holds everyone Google lists, including the signed-out account. */
 const startQueue = () => reorderQueue(state.prefs.order, state.accounts);
 
@@ -157,6 +164,14 @@ function presetWizard(): WizardState | null {
       return wizardStart(startQueue());
     case 'signing-out':
       return { ...base, phase: 'signing-out', tabId: 7 };
+    case 'signing-in-new': {
+      // new@example.com was typed in second; the first account is signed in already.
+      const q = [queue[0]!, NEW_EMAIL, ...queue.slice(1)];
+      state.accounts = state.accounts.map((a) =>
+        a.email === q[0] ? { ...a, index: 0 } : { ...a, index: -1, signedOut: true },
+      );
+      return { ...wizardStart(q), phase: 'signing-in', current: 1, completed: [q[0]!], added: [NEW_EMAIL], tabId: 7 };
+    }
     case 'signing-in':
       state.accounts = state.accounts.map((a) =>
         a.email === queue[0] ? { ...a, index: 0 } : { ...a, index: -1, signedOut: true },
@@ -247,7 +262,9 @@ async function handle(req: Request): Promise<unknown> {
       const w = state.wizard;
       if (!w) throw new Error('No reorder in progress.');
       if (w.phase !== 'confirm') return clone(w);
-      const next: WizardState = { ...w, queue: [...req.queue] };
+      const known = new Set(state.accounts.map((a) => a.email));
+      const added = req.queue.filter((e) => !known.has(e));
+      const next: WizardState = { ...w, queue: [...req.queue], added: added.length > 0 ? added : undefined };
       setWizard(next);
       return next;
     }
