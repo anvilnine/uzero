@@ -228,12 +228,17 @@ Every push and pull request runs the CI workflow: type checks, Svelte checks, te
 
 To cut a release from an up-to-date `main`:
 
+1. Add a section for the new version to [CHANGELOG.md](CHANGELOG.md). Write it for people who use Uzero.
+2. Run the release script:
+
 ```
 pnpm release patch          # or minor, major, or an exact version such as 1.2.0
 pnpm release minor --dry-run
 ```
 
-The script bumps `package.json`, commits `chore: release vX.Y.Z`, tags `vX.Y.Z` and pushes both. The tag starts the Release workflow. It runs CI again, checks that the tag matches `package.json`, builds the store zips and publishes a [GitHub release](https://github.com/anvilnine/uzero/releases) with notes grouped from the commit messages. A tag with a suffix such as `v1.2.0-beta.1` becomes a pre-release.
+The script bumps `package.json`, commits `chore: release vX.Y.Z`, tags `vX.Y.Z` and pushes both. The tag starts the Release workflow. It runs CI again, checks that the tag matches `package.json`, builds the store zips and publishes a [GitHub release](https://github.com/anvilnine/uzero/releases). The release notes start with the CHANGELOG section, then list the commits.
+
+Then the Submit to stores workflow uploads the zips to the Chrome Web Store, Firefox Add-ons (with the sources zip) and Edge Add-ons, and submits each for review. A store without keys is skipped. A tag with a suffix such as `v1.2.0-beta.1` becomes a pre-release and skips the stores. Keys and manual runs: [docs/RELEASING.md](docs/RELEASING.md).
 
 Commit messages use [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `docs:`, `chore:`) so the release notes can group them.
 

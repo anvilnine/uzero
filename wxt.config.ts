@@ -12,6 +12,11 @@ export default defineConfig({
   // Safari overlay resources need MV3 host-scoped web_accessible_resources.
   manifestVersion: 3,
   modules: ['@wxt-dev/module-svelte'],
+  // The Firefox sources zip goes to AMO reviewers. Leave out design files, store art
+  // and the Safari app: none of them are part of the Firefox build.
+  zip: {
+    excludeSources: ['design/**', 'branding/**', 'docs/store/**', 'docs/screenshots/**', 'safari/**'],
+  },
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
     return {

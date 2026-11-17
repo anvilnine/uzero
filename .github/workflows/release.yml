@@ -1,7 +1,8 @@
 name: Release
 
 # Push a vX.Y.Z tag (scripts/release.sh does this) to publish a GitHub release
-# with store-ready zips for Chrome, Edge and Firefox.
+# with store-ready zips for Chrome, Edge and Firefox, then submit them to the stores.
+# Tags with a hyphen (v1.2.0-beta.1) become prereleases and skip the stores.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
@@ -52,3 +53,11 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --verify-tag $prerelease \
             --title "Uzero $GITHUB_REF_NAME" --notes-file .output/notes.md \
             .output/*.zip .output/SHA256SUMS.txt
+
+  submit:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/submit.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

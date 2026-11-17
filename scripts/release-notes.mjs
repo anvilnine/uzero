@@ -2,6 +2,7 @@
 // Prints Markdown release notes for a tag, grouped by Conventional Commit type.
 // Usage: node scripts/release-notes.mjs v1.2.0
 import { execFileSync } from 'node:child_process';
+import { changelogSection } from './changelog.mjs';
 
 const tag = process.argv[2];
 if (!tag) {
@@ -10,6 +11,10 @@ if (!tag) {
 }
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+
+// The user-facing section from CHANGELOG.md goes first, when it exists.
+const userNotes = changelogSection(tag);
+if (userNotes) console.log(`${userNotes}\n`);
 
 let previous = '';
 try {
