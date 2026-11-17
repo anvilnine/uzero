@@ -44,6 +44,7 @@ describe('sanitizePrefs', () => {
       pinEnabled: true,
       serviceDefaults: { gmail: 'c@x.com' },
       disabledServices: ['meet'],
+      safariGuideMode: 'window',
     });
   });
 });
@@ -88,5 +89,42 @@ describe('storage items', () => {
     await accountsItem.setValue([acct('a@x.com', 0)]);
     expect(await accountsItem.getValue()).toEqual([acct('a@x.com', 0)]);
     expect(await fakeBrowser.storage.local.get('accounts')).toEqual({ accounts: [acct('a@x.com', 0)] });
+  });
+});
+
+
+describe('Safari guide preference', () => {
+  beforeEach(() => fakeBrowser.reset());
+
+  it('defaults missing values to a guide window', () => {
+    expect(DEFAULT_PREFS.safariGuideMode).toBe('window');
+    expect(sanitizePrefs({ order: ['a@x.com'] }).safariGuideMode).toBe('window');
+  });
+
+  it.each(['window', 'overlay'])('accepts %s in validated patches', (mode) => {
+    const next = applyPrefsPatch(DEFAULT_PREFS, { safariGuideMode: mode });
+    expect(next.safariGuideMode).toBe(mode);
+    expect(applyPrefsPatch(next, { pinEnabled: true }).safariGuideMode).toBe(mode);
+  });
+
+  it.each([undefined, null, true, 1, '', 'OVERLAY', 'side-panel', {}, []])('defaults invalid %j values', (value) => {
+    expect(sanitizePrefs({ safariGuideMode: value }).safariGuideMode).toBe('window');
+    expect(applyPrefsPatch({ ...DEFAULT_PREFS, safariGuideMode: 'overlay' }, { safariGuideMode: value }).safariGuideMode).toBe('window');
+  });
+
+  it('reads old stored prefs without losing existing settings', async () => {
+    const old = { order: ['a@x.com'], meta: {}, pinEnabled: true, serviceDefaults: {}, disabledServices: ['meet'] };
+    await fakeBrowser.storage.local.set({ prefs: old });
+    expect(await prefsItem.getValue()).toEqual({ ...old, safariGuideMode: 'window' });
+  });
+
+  it('validates stored values and persists either supported mode', async () => {
+    await fakeBrowser.storage.local.set({ prefs: { ...DEFAULT_PREFS, safariGuideMode: 'bad' } });
+    expect((await prefsItem.getValue()).safariGuideMode).toBe('window');
+    for (const safariGuideMode of ['window', 'overlay'] as const) {
+      await prefsItem.setValue({ ...DEFAULT_PREFS, safariGuideMode });
+      expect((await prefsItem.getValue()).safariGuideMode).toBe(safariGuideMode);
+      expect((await fakeBrowser.storage.local.get('prefs')).prefs).toMatchObject({ safariGuideMode });
+    }
   });
 });

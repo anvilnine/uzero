@@ -1,10 +1,10 @@
-# Uzero — Privacy Policy
+# Uzero Privacy Policy
 
-**Effective date:** 2026-11-09
+**Effective date:** 2026-11-18
 
 > **Short version.** Uzero runs only in your browser. We have no servers, so we never receive your data. Uzero talks only to Google, and only to do what you ask. It never sees your passwords.
 
-This policy covers the Uzero browser extension ("Uzero") for Chrome, Edge and Firefox. "We" and "us" mean anvilnine, the developer of Uzero. "You" means the person who uses it.
+This policy covers the Uzero browser extension ("Uzero") for Chrome, Edge, Firefox and Safari. "We" and "us" mean anvilnine, the developer of Uzero. "You" means the person who uses it.
 
 ## 1. The data Uzero uses
 
@@ -13,20 +13,23 @@ Uzero uses only the data it needs to show and order your Google accounts.
 | Data | Where it comes from | Why Uzero needs it |
 |---|---|---|
 | Email, name, profile photo link and sign-in position of each Google account that is signed in to your browser | Google, at `accounts.google.com` | To show your accounts and their order |
-| The address of your current tab, **only on Google sites** | Your browser | To switch that tab to another account, when you ask |
+| Google tab addresses | Your browser | Switch a tab when you ask. In Safari, find a normal Google tab for account-list requests and the reorder guide. |
 | Your order, labels, colors and settings | You | To remember your choices |
+| Counts of what Uzero did for you: links Pin opened, tabs you switched, reorders you finished | Uzero, as you use it | To show you these numbers in Uzero's settings |
 
 Uzero does **not** use or collect:
 - passwords, 2-Step Verification codes, or any other sign-in secret;
 - the content of your email, files, calendar or any other Google service;
-- your browsing history, or the address of any non-Google page;
+- your browsing history;
 - your location, contacts, or device identifiers.
+
+Safari exposes tab addresses through its `tabs` permission. Uzero checks them to find eligible Google tabs and detect when a reorder tab navigates away. It does not persist non-Google addresses.
 
 ## 2. Where your data is kept
 
 All data stays **on your device**, in the browser's own extension storage:
 
-- **Kept until you remove it:** your order, labels, colors, settings, and a copy of the account list. The popup keeps one more copy of that list in its own page storage, so it opens fast.
+- **Kept until you remove it:** your order, labels, colors, settings, the counts listed above, the star rating you gave Uzero (if any), and a copy of the account list. The Chrome, Edge and Firefox popup keeps one more copy of that list in its own page storage, so it opens fast. Safari does not use that popup cache.
 - **Deleted when the browser closes:** the progress of a reorder, and short-term status.
 
 We have no servers, no database and no account system. **We never receive a copy of your data, so we cannot see, sell or share it.**
@@ -49,7 +52,9 @@ Uzero sends **nothing** to us or to any other party. It has no analytics, no ads
 
 ## 5. Passwords and signing in
 
-Uzero **never** types, fills, reads or stores passwords. It does not add scripts to Google's sign-in pages. You type every password on Google's own page. During a reorder, Uzero only opens Google's own sign-out and sign-in pages and checks which accounts are signed in.
+Uzero **never** types, fills, reads or stores passwords. You type every password on Google's own page. During a reorder, Uzero opens Google's own sign-out and sign-in pages and checks which accounts are signed in.
+
+Chrome, Edge and Firefox do not add scripts to Google's sign-in pages. Safari uses a script in an existing normal Google tab to request the account list. When you choose the sign-in overlay in Safari settings and start a reorder, Uzero also injects a guide into that reorder's `accounts.google.com` tab. The guide uses an extension-origin iframe and does not read or fill Google's form fields. The content script receives only authorization to show the guide, never the account list. The overlay is removed when the reorder finishes, is cancelled or expires, or when the tab navigates away. The default Safari guide is a separate window.
 
 ## 6. Permissions, and why
 
@@ -61,8 +66,14 @@ Uzero **never** types, fills, reads or stores passwords. It does not add scripts
 | `alarms` | Refresh the account list every 15 minutes while Pin mode is on. |
 | `sidePanel` (Chrome) | Show the reorder steps next to Google's sign-in page. |
 | `webRequest`, `webRequestBlocking` (Firefox only) | Let Uzero's own account-list request reach Google. |
+| `tabs` (Safari only) | Find eligible normal Google tabs and verify that private tabs are excluded. |
+| `scripting` (Safari only) | Request the account list through an existing normal Google tab. Show the optional reorder overlay on the current Google sign-in tab. |
 
-Uzero does not ask for access to all websites, your tabs list, cookies, or downloads. It does not run in private or incognito windows.
+Uzero does not ask for access to all websites, cookies, or downloads. Chrome, Edge and Firefox do not request the `tabs` permission. Safari does request it for the checks described above. Safari rejects private tabs and tabs whose privacy status it cannot verify for account discovery, messages, tab switching, page creation and the reorder guide. These checks remain in place even if you allow the extension in Private Browsing.
+
+**Safari Private Browsing is unsupported.** Leave **Allow in Private Browsing** off in Safari settings > Extensions > Uzero. Pin and per-service Pin work in regular browsing only after Safari's `extension.isAllowedIncognitoAccess()` returns exactly `false`. If access is on, unknown, unavailable or fails to check, Uzero pauses Pin, tries to remove existing redirect and loop rules, and shows an instruction to turn private access off and reopen Uzero or refresh. Saved Pin preferences remain on your device. Rule-installation and removal errors are shown separately from account-list errors.
+
+Safari's redirect rules cannot be limited to normal windows. Enabling private access can make Safari apply already-installed Pin redirects in private windows before Uzero detects the change and pauses Pin. Uzero rechecks on worker startup, rule updates, normal UI state/refresh/preference requests and supported permission/focus wakeups. These are permission snapshots, not an atomic guarantee against later changes. Uzero does not promise immediate detection or that private navigation is unaffected when private access is enabled.
 
 The exact Google sites Uzero can access are listed in the appendix below.
 
@@ -70,6 +81,7 @@ The exact Google sites Uzero can access are listed in the appendix below.
 
 Your data stays until you delete it. To delete all of it:
 - **Remove one label or color:** change it in Uzero's settings.
+- **Clear the counts:** press "Reset numbers" in Uzero's settings.
 - **Delete everything:** uninstall Uzero. The browser deletes all of Uzero's storage.
 
 We hold no copy, so there is nothing for us to delete.
@@ -108,7 +120,7 @@ Questions or requests: email [hello@anvilnine.com](mailto:hello@anvilnine.com).
 
 ## Appendix: Google sites Uzero can access
 
-Uzero asks for access to these 44 sites only, over HTTPS. It uses them to read your account list (`accounts.google.com`) and to open Google links in the account you pick. `www.google.com` is there only for Google Maps links.
+Uzero asks for access to these 44 sites only, over HTTPS. It uses them to read your account list (`accounts.google.com`) and to open Google links in the account you pick. `www.google.com` also supports account-list requests through an existing normal Safari tab and sign-out landing-page detection.
 
 - `accounts.google.com`
 - `admanager.google.com`

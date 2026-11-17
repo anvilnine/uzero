@@ -9,14 +9,18 @@ const switchCommand = (n: number) => ({
 // See https://wxt.dev/api/reference/wxt/interfaces/inlineconfig.html
 export default defineConfig({
   srcDir: 'src',
+  // Safari overlay resources need MV3 host-scoped web_accessible_resources.
+  manifestVersion: 3,
   modules: ['@wxt-dev/module-svelte'],
   manifest: ({ browser }) => {
     const firefox = browser === 'firefox';
     return {
-      name: 'Uzero — default account & order for Google',
+      name: browser === 'safari' ? 'Uzero' : 'Uzero — default account & order for Google',
       short_name: 'Uzero',
-      description:
-        'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
+      // App Store Connect rejects a Safari manifest description over 112 characters.
+      description: browser === 'safari'
+        ? 'Choose your default Google account and the order of your signed-in Google accounts.'
+        : 'Choose your default Google account. Open Gmail, Drive and Calendar links in the right account, or truly reorder /u/0, /u/1.',
       homepage_url: 'https://uzero.app',
       // Never runs in private windows, so it never sees or changes their Google sessions.
       incognito: 'not_allowed',
@@ -26,7 +30,14 @@ export default defineConfig({
         'alarms',
         // Firefox: DNR can't match our moz-extension:// initiator, so Origin is set via webRequest.
         ...(firefox ? ['webRequest', 'webRequestBlocking'] : []),
+        ...(browser === 'safari' ? ['scripting', 'tabs'] : []),
       ],
+      ...(browser === 'safari' && {
+        web_accessible_resources: [{
+          resources: ['reorder.html', 'chunks/*', 'assets/*', 'icon/32.png'],
+          matches: ['https://accounts.google.com/*'],
+        }],
+      }),
       // Exactly the hosts Uzero routes or reads, https only (see permissionHosts in services.ts).
       host_permissions: permissionHosts().map((h) => `https://${h}/*`),
       // Chrome allows at most 4 suggested shortcuts.

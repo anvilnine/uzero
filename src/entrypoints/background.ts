@@ -4,18 +4,23 @@ import { browser, type Browser, type PublicPath } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import type { Account, AppState, Envelope, Prefs, Request, ResponseMap, WizardState } from '@/lib/types';
 import { fetchAccounts, indexByEmail } from '@/lib/accounts';
+import { fetchAccountsViaTab, isGoogleTabUrl, NoGoogleTabError } from '@/lib/safariAccounts';
 import {
   LOOP_MAX_HOSTS, LOOP_PAUSE_MS, LOOP_RULE_BASE_ID, buildRules, loopAllowRules, namesAccount, originRule,
   pinnedHosts, recordHit,
 } from '@/lib/dnr';
+import { authorizeSafariGuide, GUIDE_AUTHORIZE, guideRunning, removeSafariGuide, safariGuideTabRemoved, showSafariGuide } from '@/lib/safariGuide';
+import { safariPinError } from '@/lib/safariPin';
 import { isTrustedSender, parseRequest } from '@/lib/messages';
+import { STATS_KEY, bump, sanitizeStats, type Counter } from '@/lib/stats';
 import { currentEmail, switchableServiceId, toAccount } from '@/lib/rewrite';
 import { ACCOUNT_HOSTS, SERVICES, serviceById, toServiceInfo } from '@/lib/services';
 import {
-  accountsItem, applyPrefsPatch, loopPausesItem, mergeOrder, prefsItem, sameJson, statusItem, wizardItem,
+  accountsItem, applyPrefsPatch, loopPausesItem, mergeOrder, pinErrorItem, prefsItem, sameJson, statusItem, wizardItem,
 } from '@/lib/store';
 import {
-  WIZARD_TTL_MS, isActive, isExpired, lastActivity, reduce, signInUrl, stepChanged, tabUrlFor, type WizardEvent,
+  WIZARD_TTL_MS, isActive, isExpired, lastActivity, placeAdded, reduce, signInUrl, stepChanged, tabUrlFor,
+  type WizardEvent,
 } from '@/lib/wizard';
 
 type DnrRule = Browser.declarativeNetRequest.Rule;
@@ -39,6 +44,7 @@ const REORDER_PAGE = '/reorder.html' as PublicPath;
 const PANEL_PAGE = '/sidepanel.html' as PublicPath;
 // BROWSER (not FIREFOX): vitest defines env flags as strings, so "false" would be truthy there.
 const IS_FIREFOX = import.meta.env.BROWSER === 'firefox';
+const IS_SAFARI = import.meta.env.BROWSER === 'safari';
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener(onMessage);
@@ -51,8 +57,29 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((cmd) => void onCommand(cmd));
   browser.tabs.onUpdated.addListener(onTabUpdated);
-  browser.tabs.onRemoved.addListener((tabId) => void onTabRemoved(tabId));
+  browser.tabs.onRemoved.addListener(async (tabId, info) => {
+    if (IS_SAFARI) {
+      if (await safariGuideTabRemoved(tabId, info.windowId)) {
+        await wizardLock(async () => {
+          const w = await wizardItem.getValue();
+          if (w?.pageTabId === tabId) await wizardItem.setValue({ ...w, pageTabId: undefined });
+        });
+        return;
+      }
+      // Only tabs previously observed in normal windows may drive a wizard or refresh.
+      if (!accountsTabs.has(tabId) && !tabUrls.has(tabId)) return;
+    }
+    void onTabRemoved(tabId);
+  });
   if (IS_FIREFOX) installFirefoxOriginFallback();
+  if (IS_SAFARI) {
+    // Best-effort wakeups. Safari does not promise an atomic notification of private-access changes.
+    browser.permissions?.onAdded?.addListener(() => void syncRules());
+    browser.permissions?.onRemoved?.addListener(() => void syncRules());
+    browser.windows.onFocusChanged?.addListener(() => void syncRules());
+    // Verify on every worker start, including rules persisted by older builds.
+    void syncRules();
+  }
 });
 
 // ---- helpers -----------------------------------------------------------------
@@ -71,6 +98,7 @@ const prefsLock = serial();
 const wizardLock = serial();
 const rulesLock = serial();
 const loopLock = serial();
+const statsLock = serial();
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -85,13 +113,30 @@ function hostOf(url: string | undefined): string | null {
   }
 }
 
+/** Add to the on-device totals (see lib/stats.ts). A failed write is dropped: counts are a nicety. */
+function countStats(add: Partial<Record<Counter, number>>): Promise<void> {
+  return statsLock(async () => {
+    try {
+      const got = await browser.storage.local.get(STATS_KEY);
+      await browser.storage.local.set({ [STATS_KEY]: bump(sanitizeStats(got[STATS_KEY]), add, Date.now()) });
+    } catch {
+      // Storage full or unavailable.
+    }
+  });
+}
+
 async function getState(): Promise<AppState> {
+  // Check before returning state, even when account discovery has not changed anything.
+  if (IS_SAFARI) await syncRules();
   const [accounts, prefs, status, stored] = await Promise.all([
     accountsItem.getValue(), prefsItem.getValue(), statusItem.getValue(), wizardItem.getValue(),
   ]);
   // An abandoned wizard expires here too, so pin mode comes back as soon as any page looks.
-  const wizard = isExpired(stored, Date.now()) ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
-  return { accounts, prefs, status, wizard };
+  const expired = isExpired(stored, Date.now());
+  const wizard = expired ? await wizardStep({ type: 'expire', now: Date.now() }) : stored;
+  // Expiry queues a rules job. Do not return a healthy Pin status before that install finishes.
+  if (IS_SAFARI && expired) await syncRules();
+  return { accounts, prefs, status, wizard, ...(IS_SAFARI ? { pinError: await pinErrorItem.getValue() } : {}) };
 }
 
 function updatePrefs(fn: (prev: Prefs) => Prefs): Promise<{ prev: Prefs; next: Prefs }> {
@@ -109,7 +154,7 @@ async function onBrowserStart(): Promise<void> {
   const prefs = await prefsItem.getValue();
   await syncAlarm(prefs.pinEnabled);
   await refresh();
-  // Rules may come from an older version; rebuild once even if nothing changed.
+  // Sync after refresh even if the account list did not change.
   await syncRules();
 }
 
@@ -119,39 +164,87 @@ async function syncAlarm(pinEnabled: boolean): Promise<void> {
   if (!pinEnabled && existing) await browser.alarms.clear(REFRESH_ALARM);
 }
 
-/** Replace all dynamic rules in one atomic call. Pin mode pauses while the wizard runs. */
+/** Only successful writes populate this worker-local cache. Permission is still checked every time. */
+let safariRulesKey: string | null = null;
+
+/** Replace redirects and Safari loop rules under one lock, including the async permission check. */
 function syncRules(): Promise<void> {
   return rulesLock(async () => {
     try {
+      const permissionError = IS_SAFARI ? await safariPinError(browser.extension) : null;
       const [prefs, accounts, wizard] = await Promise.all([
         prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
       ]);
-      const paused = isActive(wizard);
+      const paused = isActive(wizard) || permissionError !== null;
       const rules = paused ? [] : buildRules(prefs, accounts);
-      pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
+      let nextSafariKey: string | null = null;
+      let safariLoopRules: DnrRule[] = [];
+      if (IS_SAFARI) {
+        const pauses = await loopPausesItem.getValue();
+        const liveHosts = Object.keys(pauses).filter(host => pauses[host]! > Date.now());
+        safariLoopRules = !paused && prefs.pinEnabled ? loopAllowRules(liveHosts) as unknown as DnrRule[] : [];
+        nextSafariKey = JSON.stringify({ eligible: permissionError === null, rules, loopRules: safariLoopRules });
+        if (safariRulesKey === nextSafariKey) {
+          await setPinError(permissionError);
+          return;
+        }
+      }
+      // Do not use a host map from an earlier successful install if this one fails.
+      pinHosts = new Map();
+      if (IS_SAFARI) {
+        const session = await browser.declarativeNetRequest.getSessionRules();
+        await browser.declarativeNetRequest.updateSessionRules({
+          removeRuleIds: session.map(r => r.id), // Also removes the old Safari Origin workaround.
+          addRules: safariLoopRules,
+        });
+      }
       const existing = await browser.declarativeNetRequest.getDynamicRules();
       await browser.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: existing.map((r) => r.id),
         addRules: rules as unknown as DnrRule[],
       });
+      safariRulesKey = nextSafariKey;
+      pinHosts = paused ? new Map() : pinnedHosts(prefs, accounts);
+      if (paused || !prefs.pinEnabled) loopHits.clear();
+      if (IS_SAFARI) await setPinError(permissionError);
     } catch (e) {
       console.error('[uzero] rules', e);
-      await clearRules();
+      const cleared = await clearRules();
+      if (IS_SAFARI) await setPinError(`Pin could not update its link rules: ${errorMessage(e)}. ${cleared ? 'Pin is paused.' : 'Uzero could not confirm that existing rules were removed.'} Keep Allow in Private Browsing off. Reopen Uzero or refresh to retry.`);
     }
   });
 }
 
-/** Fail closed: with no rules, links open where Google sends them, never at a stale /u/N. */
-async function clearRules(): Promise<void> {
+/** Notify open extension pages only on a status change, avoiding a getState/storage wakeup loop. */
+async function setPinError(message: string | null): Promise<void> {
+  if (await pinErrorItem.getValue() !== message) await pinErrorItem.setValue(message);
+}
+
+/** Fail closed after an installation error. A rejected removal is reported instead of hidden. */
+async function clearRules(): Promise<boolean> {
+  safariRulesKey = null;
   pinHosts = new Map();
+  loopHits.clear();
+  let cleared = true;
   try {
     const existing = await browser.declarativeNetRequest.getDynamicRules();
     if (existing.length) {
       await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id) });
     }
   } catch (e) {
+    cleared = false;
     console.error('[uzero] clearing rules', e);
   }
+  if (IS_SAFARI) {
+    try {
+      const session = await browser.declarativeNetRequest.getSessionRules();
+      if (session.length) await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: session.map(r => r.id) });
+    } catch (e) {
+      cleared = false;
+      console.error('[uzero] clearing session rules', e);
+    }
+  }
+  return cleared;
 }
 
 let originReady: Promise<void> | null = null;
@@ -159,7 +252,7 @@ let originReady: Promise<void> | null = null;
 /** Session rule that makes ListAccounts see a google.com Origin. Installed once per worker life. */
 function ensureOriginRule(): Promise<void> {
   // Firefox uses the webRequest fallback; its gecko id isn't a valid initiator domain.
-  if (IS_FIREFOX) return Promise.resolve();
+  if (IS_FIREFOX || IS_SAFARI) return Promise.resolve();
   originReady ??= browser.declarativeNetRequest
     .updateSessionRules({
       removeRuleIds: [ORIGIN_RULE_ID],
@@ -203,6 +296,10 @@ const tabUrls = new Map<number, string>();
 const ACCOUNT_IN_URL = /[?&]authuser=|\/u\/\d/;
 
 async function currentPinHosts(): Promise<Map<string, number>> {
+  if (IS_SAFARI) {
+    await syncRules();
+    return pinHosts ?? new Map();
+  }
   if (pinHosts) return pinHosts;
   const [prefs, accounts, wizard] = await Promise.all([
     prefsItem.getValue(), accountsItem.getValue(), wizardItem.getValue(),
@@ -224,6 +321,7 @@ async function checkLoop(tabId: number, prev: string | undefined, url: string): 
   const { hits, loop } = recordHit(loopHits.get(key) ?? [], Date.now());
   if (!loop) {
     loopHits.set(key, hits);
+    void countStats({ pinnedLinks: 1 });
     return;
   }
   loopHits.delete(key);
@@ -248,13 +346,18 @@ function updateLoopPauses(fn: (p: Record<string, number>) => Record<string, numb
     const live = Object.fromEntries(Object.entries(await loopPausesItem.getValue()).filter(([, t]) => t > now));
     const next = fn(live);
     await loopPausesItem.setValue(next);
-    const existing = await browser.declarativeNetRequest.getSessionRules();
-    await browser.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: existing
-        .map((r) => r.id)
-        .filter((id) => id >= LOOP_RULE_BASE_ID && id < LOOP_RULE_BASE_ID + LOOP_MAX_HOSTS),
-      addRules: loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
-    });
+    if (IS_SAFARI) {
+      // All Safari session and redirect writes share the eligibility check and rules lock.
+      await syncRules();
+    } else {
+      const existing = await browser.declarativeNetRequest.getSessionRules();
+      await browser.declarativeNetRequest.updateSessionRules({
+        removeRuleIds: existing
+          .map((r) => r.id)
+          .filter((id) => id >= LOOP_RULE_BASE_ID && id < LOOP_RULE_BASE_ID + LOOP_MAX_HOSTS),
+        addRules: loopAllowRules(Object.keys(next)) as unknown as DnrRule[],
+      });
+    }
     const until = Object.values(next);
     if (until.length) await browser.alarms.create(LOOP_ALARM, { when: Math.min(...until) + 500 });
     else await browser.alarms.clear(LOOP_ALARM);
@@ -274,14 +377,24 @@ function refresh(): Promise<void> {
 }
 
 async function doRefresh(): Promise<void> {
+  if (IS_SAFARI) await syncRules();
   const status = await statusItem.getValue();
   if (status.kind !== 'ok') await statusItem.setValue({ kind: 'loading' });
 
   let accounts: Account[];
   try {
-    await ensureOriginRule();
-    accounts = await fetchAccounts();
+    if (IS_SAFARI) {
+      accounts = await fetchAccountsViaTab();
+    } else {
+      await ensureOriginRule();
+      accounts = await fetchAccounts();
+    }
   } catch (e) {
+    // Safari with no Google tab open: keep showing the last list we read instead of an error.
+    if (IS_SAFARI && e instanceof NoGoogleTabError && (await accountsItem.getValue()).length) {
+      if (status.kind !== 'ok') await statusItem.setValue({ kind: 'ok', at: Date.now() });
+      return;
+    }
     await statusItem.setValue({ kind: 'error', message: errorMessage(e), at: Date.now() });
     return;
   }
@@ -314,8 +427,11 @@ function scheduleRefresh(ms = DEBOUNCE_MS): void {
 const accountsTabs = new Set<number>();
 
 function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Browser.tabs.Tab): void {
+  if (IS_SAFARI && tab.incognito !== false) return;
   if (info.status === undefined && info.url === undefined) return;
   const onAccounts = hostOf(tab.url) === ACCOUNTS_HOST;
+  // Safari reads accounts through Google tabs, so a Google page finishing a load is the refresh tick.
+  if (IS_SAFARI && !onAccounts && info.status === 'complete' && isGoogleTabUrl(tab.url)) scheduleRefresh();
   if (onAccounts) {
     accountsTabs.add(tabId);
     scheduleRefresh();
@@ -336,6 +452,7 @@ function onTabUpdated(tabId: number, info: Browser.tabs.OnUpdatedInfo, tab: Brow
     void wizardItem.getValue().then((w) => {
       if (!w || !isActive(w) || w.tabId !== tabId) return;
       void wizardStep({ type: 'touch', now: Date.now() });
+      if (IS_SAFARI && onAccounts) void syncSafariGuide(w, w);
       if (!onAccounts) scheduleRefresh(); // e.g. myaccount after sign-in
     });
   }
@@ -353,7 +470,7 @@ async function onTabRemoved(tabId: number): Promise<void> {
 
 async function activeTab(): Promise<Browser.tabs.Tab | undefined> {
   const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-  return tab;
+  return IS_SAFARI && tab?.incognito !== false ? undefined : tab;
 }
 
 async function switchActiveTab(email: string): Promise<ResponseMap['switchActiveTab']> {
@@ -364,8 +481,27 @@ async function switchActiveTab(email: string): Promise<ResponseMap['switchActive
   if (index === undefined) return { ok: false, reason: 'That account is not signed in.' };
   const url = toAccount(tab.url, index);
   if (!url) return { ok: false, reason: 'Uzero cannot switch this page.' };
-  if (url !== tab.url) await browser.tabs.update(tab.id, { url });
+  if (url !== tab.url) {
+    await browser.tabs.update(tab.id, { url });
+    void countStats({ tabSwitches: 1 });
+  }
   return { ok: true };
+}
+
+/** Safari must never let tabs.create choose the currently focused (possibly private) window.
+ * Window privacy is immutable; revalidate existence/privacy immediately before creation. */
+async function createNormalTab(options: Parameters<typeof browser.tabs.create>[0]): Promise<Browser.tabs.Tab | undefined> {
+  if (!IS_SAFARI) return browser.tabs.create(options);
+  const windows = await browser.windows.getAll();
+  for (const candidate of windows) {
+    if (candidate.id === undefined || candidate.incognito !== false || candidate.type !== 'normal') continue;
+    const normal = await browser.windows.get(candidate.id).catch(() => undefined);
+    if (normal?.id !== candidate.id || normal.incognito !== false) continue;
+    // Explicit id: closing this window produces an error, never a fallback to the private window.
+    const tab = await browser.tabs.create({ ...options, windowId: normal.id }).catch(() => undefined);
+    if (tab) return tab;
+  }
+  return undefined;
 }
 
 async function openService(serviceId: string, email: string): Promise<ResponseMap['openService']> {
@@ -376,7 +512,8 @@ async function openService(serviceId: string, email: string): Promise<ResponseMa
     index === undefined
       ? signInUrl(email, true, service.home) // signed out: let Google ask for this account
       : (toAccount(service.home, index) ?? service.home);
-  await browser.tabs.create({ url });
+  const created = await createNormalTab({ url });
+  if (!created) throw new Error('Open a normal Safari window to use Uzero.');
   return { ok: true };
 }
 
@@ -413,6 +550,9 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     if (next && isActive(next)) next = { ...next, lastActivityAt: now };
     next = await wizardEffects(prev, next, !!opts.reopen);
     await wizardItem.setValue(next);
+    await placeNewAccounts(prev, next);
+    if (next?.phase === 'done' && prev?.phase !== 'done') void countStats({ reorders: 1, accountsReordered: next.completed.length });
+    if (IS_SAFARI) await syncSafariGuide(prev, next);
     if (isActive(prev) !== isActive(next)) void syncRules();
     if (isActive(next)) {
       await browser.alarms.create(WIZARD_ALARM, { when: lastActivity(next!) + WIZARD_TTL_MS + 1000 });
@@ -421,6 +561,36 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     }
     return next;
   });
+}
+
+/**
+ * A typed-in account just signed in: Google's list put it last in the saved order, so move it to
+ * the spot the user gave it in the reorder.
+ */
+async function placeNewAccounts(prev: WizardState | null, next: WizardState | null): Promise<void> {
+  const fresh = (next?.added ?? []).filter((e) => next!.completed.includes(e) && !prev?.completed.includes(e));
+  if (fresh.length === 0) return;
+  const { prev: before, next: after } = await updatePrefs((p) => ({ ...p, order: placeAdded(p.order, next!.queue, fresh) }));
+  if (!sameJson(before.order, after.order)) void syncRules();
+}
+
+/** Presentation failures are visible, but never roll back an already completed Google step. */
+async function syncSafariGuide(prev: WizardState | null, next: WizardState | null): Promise<void> {
+  try {
+    const mode = (await prefsItem.getValue()).safariGuideMode;
+    // A recovery page can show Retry after explicit reopen. Overlay eligibility stays strict.
+    // Entering expiry/tab-closed still tears down presentation; stable errors never create it.
+    const recoveryPage = mode === 'window' && next?.phase === 'error' && prev?.phase === 'error'
+      && prev.errorKind === next.errorKind;
+    if (!next || (next.phase !== 'confirm' && !guideRunning(next) && !recoveryPage)) {
+      await removeSafariGuide(prev);
+      return;
+    }
+    if (prev?.tabId !== undefined && prev.tabId !== next.tabId) await removeSafariGuide(prev, false);
+    await showSafariGuide(mode, next);
+  } catch (e) {
+    await statusItem.setValue({ kind: 'error', message: `Safari guide: ${errorMessage(e)}. Reopen the reorder from Uzero.`, at: Date.now() });
+  }
 }
 
 async function focusWindow(windowId: number | undefined): Promise<void> {
@@ -446,7 +616,7 @@ function isWizardPage(url: string | undefined, signingOut: boolean): boolean {
 async function ownGoogleTab(tabId: number | undefined, signingOut = false): Promise<Browser.tabs.Tab | undefined> {
   if (tabId === undefined) return undefined;
   const tab = await browser.tabs.get(tabId).catch(() => undefined);
-  return tab && isWizardPage(tab.url ?? tab.pendingUrl, signingOut) ? tab : undefined;
+  return tab && (!IS_SAFARI || tab.incognito === false) && isWizardPage(tab.url ?? tab.pendingUrl, signingOut) ? tab : undefined;
 }
 
 /** Point the wizard's Google tab at `url`: reuse it if it is still ours, else open a new one. */
@@ -466,7 +636,8 @@ async function showGoogleTab(
       /* gone meanwhile: open a new one */
     }
   }
-  const created = await browser.tabs.create({ url, active: true });
+  const created = await createNormalTab({ url, active: true });
+  if (!created) return undefined;
   if (focus) await focusWindow(created.windowId);
   return created.id;
 }
@@ -487,12 +658,16 @@ async function wizardEffects(
   }
   const url = tabUrlFor(next);
   if (!url || (!stepChanged(prev, next) && !reopen)) return next;
-  return { ...next, tabId: await showGoogleTab(next.tabId, url, reopen, signingOut) };
+  const tabId = await showGoogleTab(next.tabId, url, reopen, signingOut);
+  // No verified normal window: keep the previous step pending instead of silently advancing.
+  if (IS_SAFARI && tabId === undefined) return prev;
+  return { ...next, tabId };
 }
 
 async function wizardCancel(): Promise<null> {
   await wizardLock(async () => {
     const w = await wizardItem.getValue();
+    if (IS_SAFARI) await removeSafariGuide(w);
     const own = await ownGoogleTab(w?.tabId, w?.phase === 'signing-out');
     if (own?.id !== undefined) await browser.tabs.remove(own.id).catch(() => undefined);
     await wizardItem.setValue(null);
@@ -508,7 +683,7 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
   if (pageTabId !== undefined) {
     const tab = await browser.tabs.get(pageTabId).catch(() => undefined);
     const at = tab?.url ?? tab?.pendingUrl;
-    if (tab?.id !== undefined && at?.startsWith(page)) {
+    if (tab?.id !== undefined && (!IS_SAFARI || tab.incognito === false) && at?.startsWith(page)) {
       try {
         await browser.tabs.update(tab.id, { active: true });
         await focusWindow(tab.windowId);
@@ -518,7 +693,7 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
       }
     }
   }
-  return (await browser.tabs.create({ url: page, active: true })).id;
+  return (await createNormalTab({ url: page, active: true }))?.id;
 }
 
 /**
@@ -529,7 +704,21 @@ async function showReorderPage(pageTabId: number | undefined): Promise<number | 
 async function wizardOpen(queue: string[], fromPage: number | undefined, panel = false): Promise<WizardState> {
   let state = (await wizardStep({ type: 'open', queue, now: Date.now() }))!;
   if (isActive(state)) state = (await wizardStep({ type: 'touch', now: Date.now() }))!;
-  if (panel) return state;
+  if (IS_SAFARI) {
+    const mode = (await prefsItem.getValue()).safariGuideMode;
+    if (mode === 'window') {
+      const id = await showSafariGuide(mode, state, true);
+      if (id !== undefined) state = (await wizardStep({ type: 'pageOpened', tabId: id }))!;
+      return state;
+    }
+    if (guideRunning(state)) {
+      await showSafariGuide(mode, state, true);
+      await wizardFocusTab();
+      return state;
+    }
+    // Overlay selection still confirms in an extension page, without opening any Google URL.
+  }
+  if (panel && !IS_SAFARI) return state;
   const pageTabId = fromPage ?? (await showReorderPage(state.pageTabId));
   if (pageTabId !== undefined && pageTabId !== state.pageTabId) {
     state = (await wizardStep({ type: 'pageOpened', tabId: pageTabId }))!;
@@ -583,6 +772,19 @@ async function wizardFocusTab(): Promise<ResponseMap['wizardFocusTab']> {
 // ---- messages -----------------------------------------------------------------------
 
 async function handle(req: Request, sender: Browser.runtime.MessageSender): Promise<unknown> {
+  // A web-accessible iframe has extension origin, but only the active guide may use its narrow API.
+  const webParent = IS_SAFARI && sender.tab && !sender.tab.url?.startsWith(browser.runtime.getURL('/'));
+  if (webParent || (sender.frameId !== undefined && sender.frameId > 0)) {
+    const allowed = new Set(['getState', 'refresh', 'wizardSkip', 'wizardRetry', 'wizardContinue', 'wizardReopen', 'wizardFocusTab', 'wizardCancel']);
+    const [prefs, wizard] = await Promise.all([prefsItem.getValue(), wizardItem.getValue()]);
+    if (!IS_SAFARI || !allowed.has(req.type) || !await authorizeSafariGuide(sender, prefs.safariGuideMode, wizard)) throw new Error('Forbidden guide frame');
+  }
+  // Extension popups have no sender.tab. Check their active window before any reads or effects.
+  if (IS_SAFARI) {
+    if (sender.tab && sender.tab.incognito !== false) throw new Error('Uzero does not run in private windows.');
+    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.incognito !== false) throw new Error('Uzero does not run in private windows.');
+  }
   switch (req.type) {
     case 'getState':
       return getState();
@@ -591,9 +793,21 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       return getState();
     case 'savePrefs': {
       const { prev, next } = await updatePrefs((p) => applyPrefsPatch(p, req.patch));
+      if (IS_SAFARI || !sameJson(prev, next)) await syncRules();
       if (!sameJson(prev, next)) {
-        await syncRules();
         if (prev.pinEnabled !== next.pinEnabled) await syncAlarm(next.pinEnabled);
+        if (IS_SAFARI && prev.safariGuideMode !== next.safariGuideMode) {
+          const w = await wizardItem.getValue();
+          await removeSafariGuide(w);
+          if (w && (w.phase === 'confirm' || guideRunning(w))) {
+            const id = await showSafariGuide(next.safariGuideMode, w, true);
+            if (id !== undefined) await wizardStep({ type: 'pageOpened', tabId: id });
+            else if (w.phase === 'confirm') {
+              const confirmation = await showReorderPage(undefined);
+              if (confirmation !== undefined) await wizardStep({ type: 'pageOpened', tabId: confirmation });
+            }
+          }
+        }
       }
       return next;
     }
@@ -609,6 +823,12 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       const fromPage = sender.url?.startsWith(browser.runtime.getURL(REORDER_PAGE)) ? sender.tab?.id : undefined;
       const fromPanel = !!sender.url?.startsWith(browser.runtime.getURL(PANEL_PAGE));
       return wizardOpen(req.queue, fromPage, req.panel === true || fromPanel);
+    }
+    case 'wizardQueue': {
+      const known = (await accountsItem.getValue()).map((a) => a.email);
+      const state = await wizardStep({ type: 'queue', queue: req.queue, known });
+      if (!state) throw new Error('No reorder in progress.');
+      return state;
     }
     case 'wizardBegin':
       return wizardAction('begin');
@@ -632,6 +852,12 @@ function onMessage(
   sender: Browser.runtime.MessageSender,
   sendResponse: (res: Envelope<unknown>) => void,
 ): true | undefined {
+  if (IS_SAFARI && msg && typeof msg === 'object' && (msg as { type?: unknown }).type === GUIDE_AUTHORIZE) {
+    Promise.all([prefsItem.getValue(), wizardItem.getValue()])
+      .then(async ([prefs, wizard]) => ({ authorized: await authorizeSafariGuide(sender, prefs.safariGuideMode, wizard) }))
+      .then(data => sendResponse({ ok: true, data }), () => sendResponse({ ok: true, data: { authorized: false } }));
+    return true;
+  }
   if (!isTrustedSender(sender, browser.runtime.id, browser.runtime.getURL('/'))) {
     sendResponse({ ok: false, error: 'Forbidden sender' });
     return undefined;

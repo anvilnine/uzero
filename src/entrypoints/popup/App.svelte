@@ -2,13 +2,16 @@
   import { onMount, tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { getApi, type Api } from '../../lib/api';
+  import { SAFARI_PRIVATE_LIMITATION, safariPinFeedback } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
-  import { inProgress } from '../../lib/wizard';
+  import { inProgress, reorderQueue } from '../../lib/wizard';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
   import Toggle from '../../ui/Toggle.svelte';
+  import SiteLinks from '../../ui/SiteLinks.svelte';
   import AccountSheet from './AccountSheet.svelte';
+  import { loadStats, pinLine } from '../../lib/stats';
   import {
     cleanLabel,
     lineup,
@@ -24,6 +27,7 @@
   let api: Api | null = null;
   let app = $state<AppState | null>(readCache());
   let fatal = $state<string | null>(null);
+  let pinVerified = $state(true);
   let busy = $state(true);
   let tab = $state<{ serviceId: string | null; email: string | null } | null>(null);
   let services = $state<ServiceInfo[]>([]);
@@ -52,6 +56,8 @@
   );
   const canSwitch = $derived(!!tab?.serviceId);
   const statusError = $derived(app?.status.kind === 'error' ? app.status.message : null);
+  const pinAttention = $derived(import.meta.env.BROWSER === 'safari' && (!pinVerified || app?.pinError !== null)
+    ? safariPinFeedback(app?.prefs.pinEnabled ?? false, app?.pinError, pinVerified) : null);
   const activeCount = $derived(rows.filter((r) => !r.inactive).length);
   // Does Google's own /u/N order already match the user's order?
   const inSync = $derived(
@@ -68,12 +74,16 @@
     }
     queued = null;
     app = s;
+    pinVerified = true;
     fatal = null;
     writeCache(s);
   }
 
+  let pinCount = $state<string | null>(null);
+
   onMount(() => {
     let unsub = () => {};
+    void loadStats().then((s) => (pinCount = pinLine(s, navigator.language)));
     if (typeof browser !== 'undefined' && browser.windows) {
       browser.windows.getCurrent().then((w) => (windowId = w.id), () => {});
     }
@@ -121,10 +131,15 @@
     if (!app || !api) return;
     app = { ...app, prefs: { ...app.prefs, ...patch } };
     writeCache(app);
+    if (import.meta.env.BROWSER === 'safari') pinVerified = false;
     try {
       await api.send({ type: 'savePrefs', patch });
+      if (import.meta.env.BROWSER === 'safari') accept(await api.send({ type: 'getState' }));
+      return true;
     } catch (e) {
+      if (import.meta.env.BROWSER === 'safari') pinVerified = false;
       say(errorText(e));
+      return false;
     }
   }
 
@@ -178,18 +193,20 @@
   }
 
   async function togglePin(on: boolean) {
-    await save({ pinEnabled: on });
-    announce = on ? 'Pin is on.' : 'Pin is off.';
+    const saved = await save({ pinEnabled: on });
+    announce = import.meta.env.BROWSER === 'safari'
+      ? safariPinFeedback(app?.prefs.pinEnabled ?? on, app?.pinError, saved === true && pinVerified)
+      : on ? 'Pin is on.' : 'Pin is off.';
   }
 
   async function makeItReal() {
     if (!api || !app) return;
     // The steps sit next to Google's sign-in page in the side panel, when the browser has one.
     // Opened before any await (it needs this click); if it fails, the reorder tab opens instead.
-    const opening = openSidePanel(windowId);
+    const opening = import.meta.env.BROWSER === 'safari' ? Promise.resolve(false) : openSidePanel(windowId);
     try {
       // While a reorder runs, the background keeps it and just brings its page back.
-      const queue = reorder?.queue ?? rows.filter((r) => !r.inactive).map((r) => r.email);
+      const queue = reorder?.queue ?? reorderQueue(app.prefs.order, app.accounts);
       const panel = await opening;
       await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
       closeView();
@@ -376,6 +393,13 @@
     </div>
   </header>
 
+  {#if import.meta.env.BROWSER === 'safari'}
+    <aside class="safari-note" aria-label="Safari limitation">
+      <p>{SAFARI_PRIVATE_LIMITATION}</p>
+      {#if app?.pinError}<p role="status">{app.pinError}</p>{/if}
+    </aside>
+  {/if}
+
   {#if fatal && !app}
     <div class="state">
       <h2>Couldn’t load your accounts</h2>
@@ -406,8 +430,11 @@
       <div class="pin-text">
         <span class="pin-title" id="pin-title">Pin default account</span>
         <span class="pin-desc" id="pin-desc">
-          {#if app.prefs.pinEnabled && first}
+          {#if pinAttention}
+            {pinAttention}
+          {:else if app.prefs.pinEnabled && first}
             Links without an account open as {first.meta.label ?? first.name}.
+            {#if pinCount}<span class="pin-count">{pinCount}</span>{/if}
           {:else}
             Google picks the account for links.
           {/if}
@@ -516,7 +543,7 @@
       {#if reorder}
         <p>
           {#if reorder.expired}
-            Reorder paused.{app.prefs.pinEnabled ? ' Pin is back on.' : ''}
+            Reorder paused.{app.prefs.pinEnabled ? (pinAttention ? ' Pin needs attention.' : ' Pin is back on.') : ''}
           {:else}
             Reorder in progress.
           {/if}
@@ -546,6 +573,7 @@
       {/if}
     </footer>
   {/if}
+  <SiteLinks />
 
   <div class="toast" class:show={!!toast} role="status" aria-live="polite">{toast}</div>
   <div class="sr-only" aria-live="assertive">{announce}</div>
@@ -567,7 +595,7 @@
 <style>
   :global(html),
   :global(body) {
-    width: 360px;
+    width: min(360px, 100vw);
   }
   :global(body) {
     overflow: hidden;
@@ -578,8 +606,9 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 360px;
-    max-height: 560px;
+    width: 100%;
+    max-width: 360px;
+    max-height: min(560px, 100dvh);
     min-height: 240px;
     padding-bottom: 8px;
     background: var(--surface-container);
@@ -631,6 +660,14 @@
     }
   }
 
+  .safari-note {
+    margin: 0 16px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--on-surface-variant);
+  }
+  .safari-note p { margin: 0 0 8px; }
+
   /* Pin ---------------------------------------------------------------- */
   .pin {
     display: flex;
@@ -651,6 +688,10 @@
     color: var(--on-surface-variant);
     font-size: var(--t-sm);
     line-height: 16px;
+  }
+  .pin-count {
+    display: block;
+    margin-top: 2px;
   }
 
   .banner {
