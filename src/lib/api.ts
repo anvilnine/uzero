@@ -2,6 +2,7 @@
 // In a plain browser tab (design preview, no extension runtime) the mock is used; it is only
 // bundled in non-production builds (`pnpm build:preview`, `pnpm dev`).
 import type { AppState, Envelope, Request, Response } from './types';
+import { STATS_KEY } from './stats';
 
 type Listener = (state: AppState) => void;
 
@@ -41,7 +42,9 @@ const real: Api = {
         /* the next change tries again */
       }
     };
-    const onChange = () => {
+    const onChange = (changes: Record<string, unknown>) => {
+      // Stats change on every pinned link and are not part of AppState.
+      if (Object.keys(changes).every((k) => k === STATS_KEY)) return;
       if (scheduled || closed) return;
       scheduled = true;
       queueMicrotask(() => void pull());
