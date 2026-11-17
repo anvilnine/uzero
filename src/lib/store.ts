@@ -17,8 +17,16 @@ import { MAX_ACCOUNTS, normalizeEmail, sanitizeEmails } from './accounts';
 import { isLabelColor, sanitizeLabel } from './labels';
 import { SERVICE_IDS } from './services';
 
-export const prefsItem = storage.defineItem<Prefs>(KEY_PREFS, { fallback: DEFAULT_PREFS });
+const storedPrefsItem = storage.defineItem<Prefs>(KEY_PREFS, { fallback: DEFAULT_PREFS });
+export const prefsItem = {
+  ...storedPrefsItem,
+  // Old installations have no guide preference. Validate on every read without rewriting storage.
+  async getValue(): Promise<Prefs> {
+    return sanitizePrefs(await storedPrefsItem.getValue());
+  },
+};
 export const accountsItem = storage.defineItem<Account[]>(KEY_ACCOUNTS, { fallback: [] });
+export const pinErrorItem = storage.defineItem<string | null>('session:pinError', { fallback: null });
 export const statusItem = storage.defineItem<FetchStatus>(KEY_STATUS, { fallback: { kind: 'idle' } });
 export const wizardItem = storage.defineItem<WizardState | null>(KEY_WIZARD, { fallback: null });
 export const loopPausesItem = storage.defineItem<Record<string, number>>(KEY_LOOP_PAUSES, { fallback: {} });
@@ -56,6 +64,7 @@ function sanitizeServiceDefaults(input: unknown): Record<string, string> {
 export function sanitizePrefs(input: unknown): Prefs {
   const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   return {
+    safariGuideMode: raw.safariGuideMode === 'overlay' ? 'overlay' : 'window',
     order: sanitizeEmails(raw.order),
     meta: sanitizeMeta(raw.meta),
     pinEnabled: raw.pinEnabled === true,
@@ -72,7 +81,7 @@ export function applyPrefsPatch(prev: Prefs, patch: unknown): Prefs {
   return sanitizePrefs({ ...prev, ...pick(patch as Record<string, unknown>) });
 }
 
-const PREF_KEYS: (keyof Prefs)[] = ['order', 'meta', 'pinEnabled', 'serviceDefaults', 'disabledServices'];
+const PREF_KEYS: (keyof Prefs)[] = ['order', 'meta', 'pinEnabled', 'serviceDefaults', 'disabledServices', 'safariGuideMode'];
 function pick(p: Record<string, unknown>): Partial<Record<keyof Prefs, unknown>> {
   const out: Partial<Record<keyof Prefs, unknown>> = {};
   for (const k of PREF_KEYS) if (Object.hasOwn(p, k)) out[k] = p[k];

@@ -16,6 +16,7 @@ describe('parsePrefs', () => {
       pinEnabled: true,
       serviceDefaults: { gmail: 'a@x.com' },
       disabledServices: ['maps'],
+      safariGuideMode: 'window',
     };
     expect(ok(exportPrefs(prefs))).toEqual({ ok: true, skipped: 0, prefs });
   });
@@ -54,6 +55,7 @@ describe('parsePrefs', () => {
       pinEnabled: false,
       serviceDefaults: { gmail: 'c@x.com' },
       disabledServices: ['meet'],
+      safariGuideMode: 'window',
     });
     // 4 bad order entries (dup, 2 junk, 1 bad email), 2 bad meta keys, 2 bad service defaults.
     expect(r.skipped).toBe(8);
@@ -74,5 +76,21 @@ describe('parsePrefs', () => {
     const r = parsePrefs(text);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain(error);
+  });
+});
+
+
+describe('Safari guide backups', () => {
+  it.each(['window', 'overlay'] as const)('round-trips %s', (safariGuideMode) => {
+    const prefs = { ...DEFAULT_PREFS, safariGuideMode };
+    expect(ok(exportPrefs(prefs)).prefs).toEqual(prefs);
+  });
+
+  it.each(['uzero-prefs', 'lineup-prefs'])('defaults old %s backups', (kind) => {
+    expect(ok(JSON.stringify({ kind, version: 1, prefs: { order: [] } })).prefs.safariGuideMode).toBe('window');
+  });
+
+  it.each([null, true, 3, '', 'OVERLAY', {}, []])('rejects invalid guide mode %j', (safariGuideMode) => {
+    expect(ok(JSON.stringify({ order: [], safariGuideMode })).prefs.safariGuideMode).toBe('window');
   });
 });

@@ -132,7 +132,8 @@ export async function fetchAccounts(fetchFn: typeof fetch = fetch, timeoutMs = 1
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`Google answered ${res.status}`);
-    return parseListAccounts(await res.text());
+    const body = await res.text();
+    return parseListAccounts(body);
   } finally {
     clearTimeout(timer);
   }
