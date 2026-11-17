@@ -31,7 +31,11 @@ export interface AccountMeta {
   color?: LabelColor;
 }
 
+export type SafariGuideMode = 'window' | 'overlay';
+
 export interface Prefs {
+  /** Where Safari shows the real reorder guide. Other browsers ignore this preference. */
+  safariGuideMode: SafariGuideMode;
   /** The user's preferred order, by email. First = their "default". */
   order: string[];
   meta: Record<string, AccountMeta>;
@@ -44,6 +48,7 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = {
+  safariGuideMode: 'window',
   order: [],
   meta: {},
   pinEnabled: false,
@@ -62,6 +67,8 @@ export interface AppState {
   accounts: Account[];
   prefs: Prefs;
   status: FetchStatus;
+  /** Safari Pin eligibility or installation error, separate from account discovery. */
+  pinError?: string | null;
   wizard: WizardState | null;
 }
 

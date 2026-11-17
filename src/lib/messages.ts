@@ -52,6 +52,6 @@ export function isTrustedSender(
   extensionOrigin: string,
 ): boolean {
   if (sender.id !== extensionId) return false;
-  // No content scripts exist, so every legit sender is an extension page.
+  // General messages require an extension page. Safari overlay frames get further checks in the router.
   return typeof sender.url === 'string' && sender.url.startsWith(extensionOrigin);
 }

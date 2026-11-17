@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Uzero</title>
+    <link rel="stylesheet" href="../Style.css">
+    <script src="../Script.js" defer></script>
+</head>
+<body>
+<main>
+    <img src="../Icon.png" width="96" height="96" alt="">
+    <h1>Uzero</h1>
+    <p class="purpose">Put your signed-in Google accounts in your order.</p>
+    <ol>
+        <li id="instructions">Open Safari settings, then Extensions and select Uzero.</li>
+        <li>Turn on Uzero. Allow access to the supported Google websites listed by Safari.</li>
+        <li>Leave Allow in Private Browsing off. Private Browsing is unsupported.</li>
+        <li>Open a Google page in Safari, then choose Uzero from Safari's extensions menu to see your accounts.</li>
+    </ol>
+    <button id="settings" type="button" hidden>Open Safari Extension Settings</button>
+    <p id="status" role="status" aria-live="polite">Turn on Uzero in Safari settings.</p>
+    <p class="note">Enabling Allow in Private Browsing may apply existing Pin redirects privately before Uzero detects the change and pauses Pin. If Pin is paused, turn that setting off, then reopen Uzero or refresh. Your Pin choices are saved.</p>
+    <p class="note">Uzero reads your account list through an open Google page. It never reads your passwords.</p>
+</main>
+</body>
+</html>

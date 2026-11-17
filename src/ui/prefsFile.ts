@@ -74,6 +74,7 @@ export function parsePrefs(text: string): ImportResult {
     ok: true,
     skipped,
     prefs: {
+      safariGuideMode: p.safariGuideMode === 'overlay' ? 'overlay' : 'window',
       order,
       meta,
       pinEnabled: p.pinEnabled === true,
