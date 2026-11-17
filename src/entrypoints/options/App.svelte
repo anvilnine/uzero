@@ -409,11 +409,6 @@
           <Stars value={stars} label="Rate Uzero" onpick={pickStars} />
         </div>
       {/if}
-      {#if path === 'review' && reviewUrl && store}
-        <p class="rate-note" aria-live="polite">A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
-      {:else if path === 'feedback'}
-        <p class="rate-note" aria-live="polite">Tell me what went wrong. Leave an email if you want a reply.</p>
-      {/if}
       <div class="actions">
         {#if path === 'review' && reviewUrl}
           <a class="btn btn-filled" href={reviewUrl} target="_blank" rel="noreferrer">Write a review</a>
@@ -661,12 +656,6 @@
   /* Feedback ------------------------------------------------------------ */
   .rate {
     padding: 0 18px 4px;
-  }
-  .rate-note {
-    margin: 0;
-    padding: 4px 24px 12px;
-    color: var(--on-surface-variant);
-    max-width: 62ch;
   }
 
   /* Backup -------------------------------------------------------------- */
