@@ -470,7 +470,7 @@
         {/each}
       </ol>
 
-      {#if !safari && matches}
+      {#if matches}
         <AskCard />
       {/if}
 

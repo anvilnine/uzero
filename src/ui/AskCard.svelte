@@ -8,7 +8,6 @@
     STORE_NAMES,
     detectStore,
     dismiss,
-    feedbackLink,
     loadAsk,
     rate,
     route,
@@ -17,23 +16,18 @@
     shouldAsk,
     type AskState,
   } from '../lib/ask';
+  import { formLink, pageContext } from '../lib/feedback';
+  import Stars from './Stars.svelte';
 
-  /** Shown on the reorder "done" screen when Google's order matches. Never in the Safari build. */
+  /** Shown on the reorder "done" screen when Google's order matches. */
   let ask = $state<AskState | null>(null);
   let asking = $state(false);
   let rating = $state(0);
-  let hover = $state(0);
   let copied = $state(false);
 
   const store = detectStore(import.meta.env.BROWSER, typeof navigator === 'undefined' ? '' : navigator.userAgent);
   const reviewUrl = store ? REVIEW_URLS[store] : '';
-  const version = typeof browser !== 'undefined' && browser.runtime?.getManifest ? browser.runtime.getManifest().version : undefined;
-  const feedbackUrl = feedbackLink(FEEDBACK_URL, {
-    env: import.meta.env.MODE === 'production' ? 'prod' : 'dev',
-    source: 'reorder-done',
-    version,
-    locale: typeof navigator === 'undefined' ? undefined : navigator.language,
-  });
+  const feedbackUrl = formLink(FEEDBACK_URL, pageContext('reorder-done'));
   const shares = shareLinks();
   const path = $derived(rating ? route(rating) : null);
 
@@ -78,28 +72,13 @@
 
 {#if asking && !rating}
   <section class="ask" aria-labelledby="ask-title">
-    <h2 id="ask-title">How did Uzero do?</h2>
-    <div class="stars" role="radiogroup" aria-label="Rating" tabindex="-1">
-      {#each [1, 2, 3, 4, 5] as n (n)}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={rating === n}
-          aria-label={`${n} of 5`}
-          class:on={(hover || rating) >= n}
-          onmouseenter={() => (hover = n)}
-          onmouseleave={() => (hover = 0)}
-          onfocus={() => (hover = n)}
-          onblur={() => (hover = 0)}
-          onclick={() => pick(n)}>★</button
-        >
-      {/each}
-    </div>
+    <h2 id="ask-title">How did the reorder go?</h2>
+    <div class="center"><Stars onpick={pick} /></div>
     <button type="button" class="btn btn-text small" onclick={notNow}>Not now</button>
   </section>
 {:else if path === 'review'}
   <section class="ask" aria-live="polite">
-    <h2>Thanks. Glad it worked.</h2>
+    <h2>Glad it worked.</h2>
     {#if reviewUrl && store}
       <p>A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
       <div class="row">
@@ -114,17 +93,13 @@
   </section>
 {:else if path === 'feedback'}
   <section class="ask" aria-live="polite">
-    <h2>Thanks for telling us.</h2>
-    {#if feedbackUrl}
-      <p>What got in the way? The form goes straight to the developer, and a reply comes back if you leave an email.</p>
-      <div class="row">
-        <a class="btn btn-filled" href={feedbackUrl} target="_blank" rel="noreferrer">Tell us what went wrong</a>
-      </div>
-    {:else}
-      <p>Tell us what went wrong on the <a href="https://uzero.app/support/" target="_blank" rel="noreferrer">support page</a>.</p>
-    {/if}
+    <h2>Sorry about that.</h2>
+    <p>Tell me what went wrong. Leave an email if you want a reply.</p>
+    <div class="row">
+      <a class="btn btn-filled" href={feedbackUrl || 'https://uzero.app/support/'} target="_blank" rel="noreferrer">Send feedback</a>
+    </div>
     {#if reviewUrl && store}
-      <a class="quiet" href={reviewUrl} target="_blank" rel="noreferrer">Rate on the {STORE_NAMES[store]}</a>
+      <a class="quiet" href={reviewUrl} target="_blank" rel="noreferrer">Review on the {STORE_NAMES[store]} anyway</a>
     {/if}
   </section>
 {:else if ask && ask.rating && ask.rating >= 4}
@@ -161,28 +136,10 @@
     line-height: 20px;
     text-wrap: pretty;
   }
-  .stars {
+  .center {
     display: flex;
     justify-content: center;
-    gap: 4px;
     margin: 0 0 4px;
-  }
-  .stars button {
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 50%;
-    background: none;
-    color: var(--outline-variant);
-    font-size: 28px;
-    line-height: 1;
-    cursor: pointer;
-  }
-  .stars button.on {
-    color: var(--primary);
-  }
-  .stars button:focus-visible {
-    outline: 2px solid var(--primary);
   }
   .row {
     display: flex;

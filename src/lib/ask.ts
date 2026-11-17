@@ -92,18 +92,6 @@ export const STORE_NAMES: Record<Store, string> = {
   firefox: 'Firefox Add-ons',
 };
 
-/** Feedback form link with the hidden fields from docs/feedback-forms.md. No user fields: Uzero has no accounts. */
-export function feedbackLink(base: string, opts: { env: 'prod' | 'dev'; source: string; version?: string; locale?: string }): string {
-  if (!base) return '';
-  const u = new URL(base);
-  u.searchParams.set('app', 'uzero');
-  u.searchParams.set('env', opts.env);
-  u.searchParams.set('source', opts.source);
-  if (opts.version) u.searchParams.set('version', opts.version);
-  if (opts.locale) u.searchParams.set('locale', opts.locale);
-  return u.toString();
-}
-
 export interface ShareLink {
   id: 'x' | 'bluesky' | 'linkedin' | 'reddit';
   label: string;
