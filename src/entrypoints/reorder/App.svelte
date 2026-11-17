@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
-  import { inProgress } from '../../lib/wizard';
+  import { addToQueue, inProgress, reorderQueue, restoreToQueue } from '../../lib/wizard';
   import type { AppState, Request, WizardState } from '../../lib/types';
   import AskCard from '../../ui/AskCard.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
   import SiteLinks from '../../ui/SiteLinks.svelte';
-  import { lineup, toneOf, type Row } from '../../ui/model';
+  import { lineup, move, toneOf, type Row } from '../../ui/model';
   import { closePanel, closeView, errorText } from '../../ui/nav';
 
   /** Narrow layout for the browser's side panel, next to Google's sign-in page. */
@@ -26,6 +26,13 @@
   let heading = $state<HTMLElement | null>(null);
   let copied = $state<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Short note for screen readers after a list edit (remove, add back). */
+  let announce = $state('');
+  /** "Add an account" form, before starting. */
+  let adding = $state(false);
+  let draft = $state('');
+  let addError = $state<string | null>(null);
+  let addInput = $state<HTMLInputElement | null>(null);
 
   const w = $derived(app?.wizard ?? null);
   const rowsByEmail = $derived(new Map((app ? lineup(app) : []).map((r) => [r.email, r])));
@@ -41,6 +48,13 @@
           inactive: true,
         },
     ),
+  );
+  // Before starting: everyone Google lists (signed in or out), and the ones taken off this reorder.
+  const everyone = $derived(app ? reorderQueue(app.prefs.order, app.accounts) : []);
+  const removedRows = $derived<Row[]>(
+    w?.phase === 'confirm'
+      ? everyone.filter((e) => !w.queue.includes(e)).flatMap((e) => rowsByEmail.get(e) ?? [])
+      : [],
   );
   const currentRow = $derived(w ? queueRows[w.current] : undefined);
   const live = $derived(w?.phase === 'signing-out' || w?.phase === 'signing-in');
@@ -187,9 +201,7 @@
 
   async function startFresh() {
     if (!api || !app) return;
-    const queue = lineup(app)
-      .filter((r) => !r.inactive)
-      .map((r) => r.email);
+    const queue = reorderQueue(app.prefs.order, app.accounts);
     pending = 'wizardOpen';
     try {
       const next = await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
@@ -200,6 +212,72 @@
     } finally {
       pending = null;
     }
+  }
+
+  /** Save an edit to the list before starting, then put focus on `focusSel` so keyboard users keep their place. */
+  async function editQueue(queue: string[], note: string, focusSel: string) {
+    if (!api || !app) return;
+    pending = 'wizardQueue';
+    actionError = null;
+    try {
+      const next = await api.send({ type: 'wizardQueue', queue });
+      app = { ...app, wizard: next };
+      announce = note;
+    } catch (e) {
+      actionError = errorText(e);
+    } finally {
+      pending = null;
+    }
+    await tick();
+    (document.querySelector(focusSel) as HTMLElement | null)?.focus();
+  }
+
+  function removeFromQueue(email: string) {
+    if (!w) return;
+    void editQueue(w.queue.filter((e) => e !== email), `Removed ${email}.`, `[data-restore="${CSS.escape(email)}"]`);
+  }
+
+  async function openAdd() {
+    adding = true;
+    addError = null;
+    await tick();
+    addInput?.focus();
+  }
+
+  function closeAdd() {
+    adding = false;
+    draft = '';
+    addError = null;
+    void tick().then(() => (document.querySelector('[data-open-add]') as HTMLElement | null)?.focus());
+  }
+
+  async function addEmail(e: SubmitEvent) {
+    e.preventDefault();
+    if (!w) return;
+    const res = addToQueue(w.queue, draft, everyone);
+    if (!res.ok) {
+      addError = res.reason === 'duplicate' ? 'That account is already in the list.' : 'Enter a full email address.';
+      addInput?.focus();
+      return;
+    }
+    addError = null;
+    draft = '';
+    await editQueue(res.queue, res.restored ? `Added back ${res.email}.` : `Added ${res.email}.`, '#add-email');
+  }
+
+  /** Move a typed-in account up or down the list, keeping focus on the same button. */
+  function shift(email: string, by: -1 | 1) {
+    if (!w) return;
+    const from = w.queue.indexOf(email);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= w.queue.length) return;
+    const dir = by < 0 ? 'up' : 'down';
+    void editQueue(move(w.queue, from, to), `Moved ${email} to ${to + 1}.`, `[data-move-${dir}="${CSS.escape(email)}"]`);
+  }
+
+  function addBack(email: string) {
+    if (!w) return;
+    void editQueue(restoreToQueue(w.queue, everyone, email), `Added back ${email}.`, `[data-remove="${CSS.escape(email)}"]`);
   }
 
   // Password managers often fill a different email on Google's page; pasting the right one is quickest.
@@ -250,6 +328,7 @@
   // Announced without moving focus (step changes move focus to the heading instead).
   const liveStatus = $derived.by(() => {
     if (copied) return `Copied ${copied}.`;
+    if (announce && w?.phase === 'confirm') return announce;
     if (signingOut && slowSignOut) return 'Still waiting for Google. You can continue anyway.';
     return '';
   });
@@ -314,21 +393,120 @@
     {:else if w.phase === 'confirm'}
       <h1 tabindex="-1" bind:this={heading}>Reorder your Google accounts</h1>
       <p class="lede">
-        Google numbers accounts in the order you sign in. You’ll sign out of all {w.queue.length}, then
-        sign back in one at a time, in this order.
+        Google numbers accounts in the order you sign in. You’ll sign out of every account, then sign
+        back in one at a time, in this order.
       </p>
-      <ol class="order">
-        {#each queueRows as r, i (r.email)}
-          <li>
-            <span class="n">{i + 1}</span>
-            <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
-            <span class="who">
-              <span class="who-name">{r.meta.label ?? r.name}</span>
-              <span class="who-email">{r.email}</span>
-            </span>
-          </li>
-        {/each}
-      </ol>
+      {#if queueRows.length > 0}
+        <ol class="order" aria-label="Accounts to sign back in">
+          {#each queueRows as r, i (r.email)}
+            <li>
+              <span class="n">{i + 1}</span>
+              <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
+              {#if w.added?.includes(r.email)}
+                <span class="who">
+                  <span class="who-name wrap">{r.email.split('@')[0]}<wbr />@{r.email.split('@').slice(1).join('@')}</span>
+                  <span class="who-note">New. You’ll sign in.</span>
+                </span>
+                <span class="moves">
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-move-up={r.email}
+                    aria-label="Move {r.email} up"
+                    onclick={() => shift(r.email, -1)}
+                    disabled={!!pending || i === 0}
+                  >
+                    <Icon name="up" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-move-down={r.email}
+                    aria-label="Move {r.email} down"
+                    onclick={() => shift(r.email, 1)}
+                    disabled={!!pending || i === queueRows.length - 1}
+                  >
+                    <Icon name="down" size={18} />
+                  </button>
+                </span>
+              {:else}
+                <span class="who">
+                  <span class="who-name">{r.meta.label ?? r.name}</span>
+                  <span class="who-email">{r.email}</span>
+                  {#if r.account?.signedOut}
+                    <span class="who-note">Signed out. You’ll sign back in.</span>
+                  {/if}
+                </span>
+              {/if}
+              <button
+                type="button"
+                class="btn btn-text row-btn"
+                data-remove={r.email}
+                aria-label="Remove {r.email}"
+                onclick={() => removeFromQueue(r.email)}
+                disabled={!!pending}
+              >
+                Remove
+              </button>
+            </li>
+          {/each}
+        </ol>
+      {:else}
+        <p class="empty">No accounts to sign back in. Add one to start.</p>
+      {/if}
+      {#if adding}
+        <form class="add" onsubmit={addEmail} novalidate>
+          <label for="add-email">Email address</label>
+          <div class="add-row">
+            <input
+              id="add-email"
+              class="field"
+              type="email"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="name@example.com"
+              bind:value={draft}
+              bind:this={addInput}
+              aria-invalid={addError ? 'true' : undefined}
+              aria-describedby={addError ? 'add-error' : undefined}
+              onkeydown={(e) => e.key === 'Escape' && closeAdd()}
+            />
+            <button type="submit" class="btn btn-tonal" disabled={!!pending}>Add</button>
+          </div>
+          {#if addError}<p class="add-error" id="add-error">{addError}</p>{/if}
+          <button type="button" class="btn btn-text add-done" onclick={closeAdd}>Done</button>
+        </form>
+      {:else}
+        <button type="button" class="btn btn-text add-open" data-open-add onclick={openAdd} disabled={!!pending}>
+          <Icon name="plus" size={18} />
+          Add an account
+        </button>
+      {/if}
+      {#if removedRows.length > 0}
+        <h2 id="removed-heading">Removed</h2>
+        <p class="hint">They stay in Uzero. They won’t sign back in this time.</p>
+        <ul class="order removed" aria-labelledby="removed-heading">
+          {#each removedRows as r (r.email)}
+            <li>
+              <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} dim />
+              <span class="who">
+                <span class="who-name">{r.meta.label ?? r.name}</span>
+                <span class="who-email">{r.email}</span>
+              </span>
+              <button
+                type="button"
+                class="btn btn-text row-btn"
+                data-restore={r.email}
+                aria-label="Add back {r.email}"
+                onclick={() => addBack(r.email)}
+                disabled={!!pending}
+              >
+                Add back
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <h2>Before you start</h2>
       <ul class="prep">
         {#each prep as p (p)}
@@ -337,7 +515,12 @@
       </ul>
       <div class="actions">
         <button type="button" class="btn btn-text" onclick={notNow} disabled={!!pending}>Not now</button>
-        <button type="button" class="btn btn-filled" onclick={() => act('wizardBegin')} disabled={!!pending}>
+        <button
+          type="button"
+          class="btn btn-filled"
+          onclick={() => act('wizardBegin')}
+          disabled={!!pending || w.queue.length === 0}
+        >
           Sign out and start
         </button>
       </div>
@@ -659,6 +842,88 @@
     color: var(--on-surface-variant);
     font-size: var(--t-sm);
     line-height: 16px;
+  }
+  .who-note {
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 16px;
+  }
+  .row-btn {
+    flex: none;
+    margin-right: -12px;
+  }
+  .removed .who-name {
+    color: var(--on-surface-variant);
+  }
+  .who-name.wrap {
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .panel .order li {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .panel .row-btn {
+    padding: 0 8px;
+    margin-right: -8px;
+  }
+  .moves {
+    flex: none;
+    display: inline-flex;
+  }
+  .moves .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .moves .icon-btn:disabled {
+    opacity: 0.38;
+  }
+  .add-open {
+    display: flex;
+    margin: -12px 0 16px -12px;
+  }
+  .panel .add-open {
+    margin-left: -12px;
+  }
+  .add {
+    margin: -8px 0 24px;
+    text-align: left;
+  }
+  .add label {
+    display: block;
+    margin: 0 0 8px;
+    font-size: var(--t-sm);
+    font-weight: 500;
+  }
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+  .add-row .btn {
+    flex: none;
+  }
+  .add-error {
+    margin: 8px 0 0;
+    color: var(--error);
+    font-size: var(--t-sm);
+  }
+  .add-done {
+    margin: 4px 0 0 -12px;
+  }
+  .hint,
+  .empty {
+    margin: 0 0 12px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 20px;
+    text-align: left;
+  }
+  .empty {
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    border: 1px dashed var(--outline-variant);
+    border-radius: var(--r-md);
   }
   .mark {
     flex: none;

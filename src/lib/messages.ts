@@ -40,6 +40,9 @@ export function parseRequest(msg: unknown): Request | null {
       if (queue.length === 0) return null;
       return m.panel === true ? { type, queue, panel: true } : { type, queue };
     }
+    case 'wizardQueue':
+      // Empty is fine here: the user may remove everyone, then add some back before starting.
+      return Array.isArray(m.queue) ? { type, queue: sanitizeEmails(m.queue) } : null;
     default:
       return null;
   }

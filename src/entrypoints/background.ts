@@ -19,7 +19,8 @@ import {
   accountsItem, applyPrefsPatch, loopPausesItem, mergeOrder, pinErrorItem, prefsItem, sameJson, statusItem, wizardItem,
 } from '@/lib/store';
 import {
-  WIZARD_TTL_MS, isActive, isExpired, lastActivity, reduce, signInUrl, stepChanged, tabUrlFor, type WizardEvent,
+  WIZARD_TTL_MS, isActive, isExpired, lastActivity, placeAdded, reduce, signInUrl, stepChanged, tabUrlFor,
+  type WizardEvent,
 } from '@/lib/wizard';
 
 type DnrRule = Browser.declarativeNetRequest.Rule;
@@ -549,6 +550,7 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     if (next && isActive(next)) next = { ...next, lastActivityAt: now };
     next = await wizardEffects(prev, next, !!opts.reopen);
     await wizardItem.setValue(next);
+    await placeNewAccounts(prev, next);
     if (next?.phase === 'done' && prev?.phase !== 'done') void countStats({ reorders: 1, accountsReordered: next.completed.length });
     if (IS_SAFARI) await syncSafariGuide(prev, next);
     if (isActive(prev) !== isActive(next)) void syncRules();
@@ -559,6 +561,17 @@ function wizardStep(ev: WizardEvent, opts: { reopen?: boolean } = {}): Promise<W
     }
     return next;
   });
+}
+
+/**
+ * A typed-in account just signed in: Google's list put it last in the saved order, so move it to
+ * the spot the user gave it in the reorder.
+ */
+async function placeNewAccounts(prev: WizardState | null, next: WizardState | null): Promise<void> {
+  const fresh = (next?.added ?? []).filter((e) => next!.completed.includes(e) && !prev?.completed.includes(e));
+  if (fresh.length === 0) return;
+  const { prev: before, next: after } = await updatePrefs((p) => ({ ...p, order: placeAdded(p.order, next!.queue, fresh) }));
+  if (!sameJson(before.order, after.order)) void syncRules();
 }
 
 /** Presentation failures are visible, but never roll back an already completed Google step. */
@@ -810,6 +823,12 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       const fromPage = sender.url?.startsWith(browser.runtime.getURL(REORDER_PAGE)) ? sender.tab?.id : undefined;
       const fromPanel = !!sender.url?.startsWith(browser.runtime.getURL(PANEL_PAGE));
       return wizardOpen(req.queue, fromPage, req.panel === true || fromPanel);
+    }
+    case 'wizardQueue': {
+      const known = (await accountsItem.getValue()).map((a) => a.email);
+      const state = await wizardStep({ type: 'queue', queue: req.queue, known });
+      if (!state) throw new Error('No reorder in progress.');
+      return state;
     }
     case 'wizardBegin':
       return wizardAction('begin');
