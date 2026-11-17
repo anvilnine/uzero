@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
-  import { inProgress } from '../../lib/wizard';
+  import { inProgress, reorderQueue, restoreToQueue } from '../../lib/wizard';
   import type { AppState, Request, WizardState } from '../../lib/types';
   import AskCard from '../../ui/AskCard.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -25,6 +25,8 @@
   let heading = $state<HTMLElement | null>(null);
   let copied = $state<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Short note for screen readers after a list edit (remove, add back). */
+  let announce = $state('');
 
   const w = $derived(app?.wizard ?? null);
   const rowsByEmail = $derived(new Map((app ? lineup(app) : []).map((r) => [r.email, r])));
@@ -40,6 +42,13 @@
           inactive: true,
         },
     ),
+  );
+  // Before starting: everyone Google lists (signed in or out), and the ones taken off this reorder.
+  const everyone = $derived(app ? reorderQueue(app.prefs.order, app.accounts) : []);
+  const removedRows = $derived<Row[]>(
+    w?.phase === 'confirm'
+      ? everyone.filter((e) => !w.queue.includes(e)).flatMap((e) => rowsByEmail.get(e) ?? [])
+      : [],
   );
   const currentRow = $derived(w ? queueRows[w.current] : undefined);
   const live = $derived(w?.phase === 'signing-out' || w?.phase === 'signing-in');
@@ -186,9 +195,7 @@
 
   async function startFresh() {
     if (!api || !app) return;
-    const queue = lineup(app)
-      .filter((r) => !r.inactive)
-      .map((r) => r.email);
+    const queue = reorderQueue(app.prefs.order, app.accounts);
     pending = 'wizardOpen';
     try {
       const next = await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
@@ -199,6 +206,34 @@
     } finally {
       pending = null;
     }
+  }
+
+  /** Save an edit to the list before starting, then put focus on `focusSel` so keyboard users keep their place. */
+  async function editQueue(queue: string[], note: string, focusSel: string) {
+    if (!api || !app) return;
+    pending = 'wizardQueue';
+    actionError = null;
+    try {
+      const next = await api.send({ type: 'wizardQueue', queue });
+      app = { ...app, wizard: next };
+      announce = note;
+    } catch (e) {
+      actionError = errorText(e);
+    } finally {
+      pending = null;
+    }
+    await tick();
+    (document.querySelector(focusSel) as HTMLElement | null)?.focus();
+  }
+
+  function removeFromQueue(email: string) {
+    if (!w) return;
+    void editQueue(w.queue.filter((e) => e !== email), `Removed ${email}.`, `[data-restore="${CSS.escape(email)}"]`);
+  }
+
+  function addBack(email: string) {
+    if (!w) return;
+    void editQueue(restoreToQueue(w.queue, everyone, email), `Added back ${email}.`, `[data-remove="${CSS.escape(email)}"]`);
   }
 
   // Password managers often fill a different email on Google's page; pasting the right one is quickest.
@@ -249,6 +284,7 @@
   // Announced without moving focus (step changes move focus to the heading instead).
   const liveStatus = $derived.by(() => {
     if (copied) return `Copied ${copied}.`;
+    if (announce && w?.phase === 'confirm') return announce;
     if (signingOut && slowSignOut) return 'Still waiting for Google. You can continue anyway.';
     return '';
   });
@@ -313,21 +349,63 @@
     {:else if w.phase === 'confirm'}
       <h1 tabindex="-1" bind:this={heading}>Reorder your Google accounts</h1>
       <p class="lede">
-        Google numbers accounts in the order you sign in. You’ll sign out of all {w.queue.length}, then
-        sign back in one at a time, in this order.
+        Google numbers accounts in the order you sign in. You’ll sign out of every account, then sign
+        back in one at a time, in this order.
       </p>
-      <ol class="order">
-        {#each queueRows as r, i (r.email)}
-          <li>
-            <span class="n">{i + 1}</span>
-            <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
-            <span class="who">
-              <span class="who-name">{r.meta.label ?? r.name}</span>
-              <span class="who-email">{r.email}</span>
-            </span>
-          </li>
-        {/each}
-      </ol>
+      {#if queueRows.length > 0}
+        <ol class="order" aria-label="Accounts to sign back in">
+          {#each queueRows as r, i (r.email)}
+            <li>
+              <span class="n">{i + 1}</span>
+              <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
+              <span class="who">
+                <span class="who-name">{r.meta.label ?? r.name}</span>
+                <span class="who-email">{r.email}</span>
+                {#if r.account?.signedOut}
+                  <span class="who-note">Signed out. You’ll sign back in.</span>
+                {/if}
+              </span>
+              <button
+                type="button"
+                class="btn btn-text row-btn"
+                data-remove={r.email}
+                aria-label="Remove {r.email}"
+                onclick={() => removeFromQueue(r.email)}
+                disabled={!!pending}
+              >
+                Remove
+              </button>
+            </li>
+          {/each}
+        </ol>
+      {:else}
+        <p class="empty">No accounts to sign back in. Add one back to start.</p>
+      {/if}
+      {#if removedRows.length > 0}
+        <h2 id="removed-heading">Removed</h2>
+        <p class="hint">They stay in Uzero. They won’t sign back in this time.</p>
+        <ul class="order removed" aria-labelledby="removed-heading">
+          {#each removedRows as r (r.email)}
+            <li>
+              <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} dim />
+              <span class="who">
+                <span class="who-name">{r.meta.label ?? r.name}</span>
+                <span class="who-email">{r.email}</span>
+              </span>
+              <button
+                type="button"
+                class="btn btn-text row-btn"
+                data-restore={r.email}
+                aria-label="Add back {r.email}"
+                onclick={() => addBack(r.email)}
+                disabled={!!pending}
+              >
+                Add back
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <h2>Before you start</h2>
       <ul class="prep">
         {#each prep as p (p)}
@@ -336,7 +414,12 @@
       </ul>
       <div class="actions">
         <button type="button" class="btn btn-text" onclick={notNow} disabled={!!pending}>Not now</button>
-        <button type="button" class="btn btn-filled" onclick={() => act('wizardBegin')} disabled={!!pending}>
+        <button
+          type="button"
+          class="btn btn-filled"
+          onclick={() => act('wizardBegin')}
+          disabled={!!pending || w.queue.length === 0}
+        >
           Sign out and start
         </button>
       </div>
@@ -657,6 +740,32 @@
     color: var(--on-surface-variant);
     font-size: var(--t-sm);
     line-height: 16px;
+  }
+  .who-note {
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 16px;
+  }
+  .row-btn {
+    flex: none;
+    margin-right: -12px;
+  }
+  .removed .who-name {
+    color: var(--on-surface-variant);
+  }
+  .hint,
+  .empty {
+    margin: 0 0 12px;
+    color: var(--on-surface-variant);
+    font-size: var(--t-sm);
+    line-height: 20px;
+    text-align: left;
+  }
+  .empty {
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    border: 1px dashed var(--outline-variant);
+    border-radius: var(--r-md);
   }
   .mark {
     flex: none;

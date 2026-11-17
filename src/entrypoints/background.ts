@@ -811,6 +811,11 @@ async function handle(req: Request, sender: Browser.runtime.MessageSender): Prom
       const fromPanel = !!sender.url?.startsWith(browser.runtime.getURL(PANEL_PAGE));
       return wizardOpen(req.queue, fromPage, req.panel === true || fromPanel);
     }
+    case 'wizardQueue': {
+      const state = await wizardStep({ type: 'queue', queue: req.queue });
+      if (!state) throw new Error('No reorder in progress.');
+      return state;
+    }
     case 'wizardBegin':
       return wizardAction('begin');
     case 'wizardSkip':

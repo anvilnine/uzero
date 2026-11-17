@@ -6,6 +6,8 @@ import { sanitizeEmails } from './accounts';
 export type WizardEvent =
   | { type: 'open'; queue: readonly string[]; now: number }
   | { type: 'begin' }
+  /** The user edited the list before starting (removed or added back accounts). Only in confirm. */
+  | { type: 'queue'; queue: readonly string[] }
   /** Fresh ListAccounts result (a tick). */
   | { type: 'accounts'; accounts: readonly Account[] }
   | { type: 'skip' }
@@ -109,6 +111,10 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
     case 'touch':
       return isActive(state) ? { ...state, lastActivityAt: ev.now } : state;
 
+    case 'queue':
+      if (state.phase !== 'confirm') return state;
+      return { ...state, queue: sanitizeEmails(ev.queue) };
+
     case 'begin':
       if (state.phase !== 'confirm' && state.phase !== 'error') return state;
       return signOut(state);
@@ -171,6 +177,33 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
       return state;
     }
   }
+}
+
+/**
+ * Everyone the reorder signs back in by default: each account Google lists, signed in or
+ * signed out (still in its account chooser), in the user's order. Accounts Google no longer
+ * lists at all are left out. Unordered accounts go last, as in the popup.
+ */
+export function reorderQueue(order: readonly string[], accounts: readonly Account[]): string[] {
+  const listed = new Set(accounts.map((a) => a.email));
+  const out = order.filter((e) => listed.has(e));
+  for (const a of accounts) if (!out.includes(a.email)) out.push(a.email);
+  return sanitizeEmails(out);
+}
+
+/**
+ * Put a removed account back into the list at its place in `all` (the full default list):
+ * right after the nearest earlier account that is still in the list, or first.
+ */
+export function restoreToQueue(queue: readonly string[], all: readonly string[], email: string): string[] {
+  if (queue.includes(email)) return [...queue];
+  const at = all.indexOf(email);
+  if (at < 0) return [...queue, email];
+  for (let i = at - 1; i >= 0; i--) {
+    const pos = queue.indexOf(all[i]!);
+    if (pos >= 0) return [...queue.slice(0, pos + 1), email, ...queue.slice(pos + 1)];
+  }
+  return [email, ...queue];
 }
 
 /** Sign out of every account, then stay on accounts.google.com so the wizard keeps its tab. */

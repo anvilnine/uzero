@@ -145,6 +145,8 @@ export type Request =
    * `panel`: the steps show in the browser's side panel, so no reorder tab is opened.
    */
   | { type: 'wizardOpen'; queue: string[]; panel?: boolean }
+  /** Before starting: the edited list of accounts to sign back in, in order. May be empty. */
+  | { type: 'wizardQueue'; queue: string[] }
   | { type: 'wizardBegin' }
   | { type: 'wizardSkip' }
   | { type: 'wizardRetry' }
@@ -165,6 +167,7 @@ export interface ResponseMap {
   listServices: ServiceInfo[];
   activeTabService: { serviceId: string | null; email: string | null };
   wizardOpen: WizardState;
+  wizardQueue: WizardState;
   wizardBegin: WizardState;
   wizardSkip: WizardState;
   wizardRetry: WizardState;

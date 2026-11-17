@@ -4,7 +4,7 @@
   import { getApi, type Api } from '../../lib/api';
   import { SAFARI_PRIVATE_LIMITATION, safariPinFeedback } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
-  import { inProgress } from '../../lib/wizard';
+  import { inProgress, reorderQueue } from '../../lib/wizard';
   import type { AppState, LabelColor, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
@@ -205,7 +205,7 @@
     const opening = import.meta.env.BROWSER === 'safari' ? Promise.resolve(false) : openSidePanel(windowId);
     try {
       // While a reorder runs, the background keeps it and just brings its page back.
-      const queue = reorder?.queue ?? rows.filter((r) => !r.inactive).map((r) => r.email);
+      const queue = reorder?.queue ?? reorderQueue(app.prefs.order, app.accounts);
       const panel = await opening;
       await api.send(panel ? { type: 'wizardOpen', queue, panel } : { type: 'wizardOpen', queue });
       closeView();
