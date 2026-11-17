@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, WizardState } from './types';
 import {
-  inProgress, isActive, isExpired, LOGOUT_URL, reduce, signInUrl, stepChanged, tabUrlFor, WIZARD_TTL_MS,
+  addToQueue, inProgress, isActive, isExpired, LOGOUT_URL, placeAdded, reduce, reorderQueue, restoreToQueue, signInUrl,
+  stepChanged, tabUrlFor, WIZARD_TTL_MS,
 } from './wizard';
 
 const signedIn = (...emails: string[]): Account[] =>
@@ -245,6 +246,124 @@ describe('wizard reducer', () => {
     s = reduce(s, { type: 'begin' });
     s = reduce(s, { type: 'accounts', accounts: [] });
     expect(s?.phase).toBe('done');
+  });
+});
+
+describe('reorder list', () => {
+  // Google lists b and a signed in, c signed out. z@x.com is in the saved order but Google forgot it.
+  const accounts: Account[] = [...signedIn('b@x.com', 'a@x.com'), ...signedOut('c@x.com')];
+
+  it('includes signed-out accounts, in the user order, and leaves out ones Google no longer lists', () => {
+    expect(reorderQueue(['c@x.com', 'z@x.com', 'a@x.com'], accounts)).toEqual(['c@x.com', 'a@x.com', 'b@x.com']);
+    expect(reorderQueue([], signedOut('d@x.com'))).toEqual(['d@x.com']);
+  });
+
+  it('signs a signed-out account back in as part of the flow', () => {
+    // Queue a, c (signed out before the reorder), b.
+    let s = reduce(null, { type: 'open', queue: reorderQueue(['a@x.com', 'c@x.com', 'b@x.com'], accounts), now: 0 })!;
+    expect(s.queue).toEqual(['a@x.com', 'c@x.com', 'b@x.com']);
+    s = reduce(s, { type: 'begin' })!;
+    s = reduce(s, { type: 'accounts', accounts: signedOut('a@x.com', 'b@x.com', 'c@x.com') })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 1 });
+    expect(tabUrlFor(s)).toBe(signInUrl('c@x.com', false));
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com', 'c@x.com') })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('a@x.com', 'c@x.com', 'b@x.com') })!;
+    expect(s).toMatchObject({ phase: 'done', completed: ['a@x.com', 'c@x.com', 'b@x.com'] });
+  });
+
+  it('removed accounts are left out of the reorder, and signing one in anyway is a wrong account', () => {
+    let s = reduce(opened(), { type: 'queue', queue: ['b@x.com', 'c@x.com'] })!;
+    expect(s).toMatchObject({ phase: 'confirm', queue: ['b@x.com', 'c@x.com'] });
+    s = reduce(s, { type: 'begin' })!;
+    s = reduce(s, { type: 'accounts', accounts: [] })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com') })!;
+    expect(tabUrlFor(s)).toBe(signInUrl('c@x.com', false));
+    const wrong = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'a@x.com') })!;
+    expect(wrong).toMatchObject({ phase: 'error', errorKind: 'wrong-account' });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'c@x.com') })!;
+    expect(s).toMatchObject({ phase: 'done', current: 2, completed: ['b@x.com', 'c@x.com'] });
+  });
+
+  it('only edits the list before starting, and cleans it', () => {
+    const c = reduce(opened(), { type: 'queue', queue: ['A@x.com', 'a@x.com', 'junk'] })!;
+    expect(c.queue).toEqual(['a@x.com']);
+    expect(reduce(opened(), { type: 'queue', queue: [] })?.queue).toEqual([]);
+    const s = signingIn();
+    expect(reduce(s, { type: 'queue', queue: ['a@x.com'] })).toBe(s);
+    expect(reduce(null, { type: 'queue', queue: ['a@x.com'] })).toBeNull();
+  });
+
+  it('adds a removed account back at its place', () => {
+    const all = ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com'];
+    expect(restoreToQueue(['a@x.com', 'd@x.com'], all, 'c@x.com')).toEqual(['a@x.com', 'c@x.com', 'd@x.com']);
+    expect(restoreToQueue(['c@x.com'], all, 'a@x.com')).toEqual(['a@x.com', 'c@x.com']);
+    expect(restoreToQueue([], all, 'b@x.com')).toEqual(['b@x.com']);
+    expect(restoreToQueue(['b@x.com'], all, 'b@x.com')).toEqual(['b@x.com']);
+  });
+});
+
+describe('adding a new account', () => {
+  const all = ['a@x.com', 'b@x.com', 'c@x.com'];
+
+  it('lowercases a typed email and puts it last', () => {
+    expect(addToQueue(['a@x.com'], '  New@Example.COM ', all)).toEqual({
+      ok: true, queue: ['a@x.com', 'new@example.com'], email: 'new@example.com', restored: false,
+    });
+  });
+
+  it('rejects duplicates and things that are not emails', () => {
+    expect(addToQueue(['a@x.com'], 'A@X.com', all)).toEqual({ ok: false, reason: 'duplicate' });
+    expect(addToQueue(['a@x.com', 'new@example.com'], 'new@example.com', all)).toEqual({ ok: false, reason: 'duplicate' });
+    for (const bad of ['', 'new', 'new@', '@example.com', 'new@example', 'a b@example.com']) {
+      expect(addToQueue(['a@x.com'], bad, all)).toEqual({ ok: false, reason: 'invalid' });
+    }
+  });
+
+  it('typing a removed account adds it back at its place', () => {
+    expect(addToQueue(['a@x.com', 'c@x.com'], 'B@x.com', all)).toEqual({
+      ok: true, queue: ['a@x.com', 'b@x.com', 'c@x.com'], email: 'b@x.com', restored: true,
+    });
+  });
+
+  it('marks queue emails Google does not list as added, and forgets them when removed', () => {
+    let s = reduce(opened(), { type: 'queue', queue: ['b@x.com', 'new@example.com', 'a@x.com'], known: QUEUE })!;
+    expect(s).toMatchObject({ queue: ['b@x.com', 'new@example.com', 'a@x.com'], added: ['new@example.com'] });
+    s = reduce(s, { type: 'queue', queue: ['b@x.com', 'a@x.com'], known: QUEUE })!;
+    expect(s.added).toBeUndefined();
+    expect('added' in s).toBe(false);
+  });
+
+  it('asks for the new email as a step, and moves on when Google reports it signed in', () => {
+    let s = reduce(opened(), { type: 'queue', queue: ['b@x.com', 'new@example.com', 'a@x.com'], known: QUEUE })!;
+    s = reduce(s, { type: 'begin' })!;
+    s = reduce(s, { type: 'accounts', accounts: signedOut('a@x.com', 'b@x.com') })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 1 });
+    expect(tabUrlFor(s)).toBe(signInUrl('new@example.com', false));
+    // Another account instead of the new one is still a wrong account.
+    expect(reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'a@x.com') })).toMatchObject({
+      phase: 'error', errorKind: 'wrong-account',
+    });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'new@example.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 2, completed: ['b@x.com', 'new@example.com'] });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'new@example.com', 'a@x.com') })!;
+    expect(s).toMatchObject({ phase: 'done', added: ['new@example.com'] });
+  });
+
+  it('places a new account in the saved order at its spot in the reorder', () => {
+    // Google's list appended n@x.com to the saved order; the user put it second.
+    const queue = ['b@x.com', 'n@x.com', 'a@x.com'];
+    expect(placeAdded(['a@x.com', 'b@x.com', 'z@x.com', 'n@x.com'], queue, ['n@x.com'])).toEqual([
+      'a@x.com', 'b@x.com', 'n@x.com', 'z@x.com',
+    ]);
+    // First in the reorder: before the next one that is in the order.
+    expect(placeAdded(['a@x.com', 'n@x.com'], ['n@x.com', 'a@x.com'], ['n@x.com'])).toEqual(['n@x.com', 'a@x.com']);
+    // Nothing else from the reorder in the order: last.
+    expect(placeAdded(['z@x.com'], ['n@x.com'], ['n@x.com'])).toEqual(['z@x.com', 'n@x.com']);
+    // Two new ones keep their relative order; emails not in the reorder are ignored.
+    expect(placeAdded(['a@x.com', 'm@x.com', 'n@x.com'], ['n@x.com', 'm@x.com', 'a@x.com'], ['m@x.com', 'n@x.com', 'q@x.com']))
+      .toEqual(['n@x.com', 'm@x.com', 'a@x.com']);
   });
 });
 

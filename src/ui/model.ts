@@ -118,6 +118,8 @@ function isPrefs(v: unknown): v is Prefs {
 }
 
 export function readCache(): AppState | null {
+  // Safari may open this popup privately. Wait for the background context check, never paint cached accounts.
+  if (import.meta.env.BROWSER === 'safari') return null;
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -140,6 +142,7 @@ export function readCache(): AppState | null {
 }
 
 export function writeCache(s: AppState): void {
+  if (import.meta.env.BROWSER === 'safari') return;
   try {
     if (s.accounts.length === 0) localStorage.removeItem(CACHE_KEY);
     else localStorage.setItem(CACHE_KEY, JSON.stringify({ accounts: s.accounts, prefs: s.prefs }));

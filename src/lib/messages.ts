@@ -40,6 +40,9 @@ export function parseRequest(msg: unknown): Request | null {
       if (queue.length === 0) return null;
       return m.panel === true ? { type, queue, panel: true } : { type, queue };
     }
+    case 'wizardQueue':
+      // Empty is fine here: the user may remove everyone, then add some back before starting.
+      return Array.isArray(m.queue) ? { type, queue: sanitizeEmails(m.queue) } : null;
     default:
       return null;
   }
@@ -52,6 +55,6 @@ export function isTrustedSender(
   extensionOrigin: string,
 ): boolean {
   if (sender.id !== extensionId) return false;
-  // No content scripts exist, so every legit sender is an extension page.
+  // General messages require an extension page. Safari overlay frames get further checks in the router.
   return typeof sender.url === 'string' && sender.url.startsWith(extensionOrigin);
 }

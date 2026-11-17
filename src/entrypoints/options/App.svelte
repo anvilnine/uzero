@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
+  import { SAFARI_PRIVATE_LIMITATION, safariPinFeedback } from '../../lib/safariPin';
   import { pinEmail } from '../../lib/accounts';
   import type { AppState, LabelColor, Prefs, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Toggle from '../../ui/Toggle.svelte';
+  import SiteLinks from '../../ui/SiteLinks.svelte';
   import { COLOR_NAMES, LABEL_COLORS, LABEL_MAX, cleanLabel, lineup, toneOf } from '../../ui/model';
   import { errorText } from '../../ui/nav';
   import { exportPrefs, parsePrefs } from '../../ui/prefsFile';
@@ -12,6 +14,8 @@
   import { FEEDBACK_URL, REVIEW_URLS, STORE_NAMES, detectStore, loadAsk, rate, route, saveAsk, type AskState } from '../../lib/ask';
   import Stars from '../../ui/Stars.svelte';
 
+  // No stars in Safari: Apple wants apps to use its own review prompt.
+  const safariBuild = import.meta.env.BROWSER === 'safari';
   const featureUrl = formLink(FEATURE_REQUEST_URL, pageContext('options'));
   const feedbackUrl = formLink(FEEDBACK_URL, pageContext('options')) || 'https://uzero.app/support/';
   const store = detectStore(import.meta.env.BROWSER, typeof navigator === 'undefined' ? '' : navigator.userAgent);
@@ -25,17 +29,24 @@
     ask = rate(ask ?? (await loadAsk()), n);
     await saveAsk(ask);
   }
+  import { EMPTY_STATS, loadStats, saveStats, statRows, type Stats } from '../../lib/stats';
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
   let services = $state<ServiceInfo[]>([]);
   let loadError = $state<string | null>(null);
+  let pinVerified = $state(true);
   let notice = $state<{ kind: 'ok' | 'error'; text: string } | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   const labelTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** What's typed in a label field that has focus. Shown instead of the saved (trimmed) label. */
   let drafts = $state<Record<string, string>>({});
+  let stats = $state<Stats>({ ...EMPTY_STATS });
+  const locale = typeof navigator === 'undefined' ? undefined : navigator.language;
+  const statList = $derived(statRows(stats, locale));
 
+  const pinAttention = $derived(import.meta.env.BROWSER === 'safari' && (!pinVerified || app?.pinError !== null)
+    ? safariPinFeedback(app?.prefs.pinEnabled ?? false, app?.pinError, pinVerified) : null);
   const rows = $derived(app ? lineup(app) : []);
   const active = $derived(rows.filter((r) => !r.inactive));
   // Same rule as the pin redirects: the first signed-in account in your order.
@@ -47,10 +58,11 @@
   onMount(() => {
     void loadAsk().then((a) => (ask = a));
     let unsub = () => {};
+    void loadStats().then((s) => (stats = s));
     (async () => {
       try {
         api = await getApi();
-        unsub = api.subscribe((s) => (app = s));
+        unsub = api.subscribe((s) => { app = s; pinVerified = true; });
         const [s, list] = await Promise.all([
           api.send({ type: 'getState' }),
           api.send({ type: 'listServices' }),
@@ -64,12 +76,24 @@
     return () => unsub();
   });
 
+  async function resetStats() {
+    if (!confirm('Set your numbers back to zero?')) return;
+    stats = { ...EMPTY_STATS };
+    await saveStats(stats);
+  }
+
   async function save(patch: Partial<Prefs>) {
     if (!app || !api) return;
     app = { ...app, prefs: { ...app.prefs, ...patch } };
+    if (import.meta.env.BROWSER === 'safari') pinVerified = false;
     try {
       await api.send({ type: 'savePrefs', patch });
+      if (import.meta.env.BROWSER === 'safari') {
+        app = await api.send({ type: 'getState' });
+        pinVerified = true;
+      }
     } catch (e) {
+      if (import.meta.env.BROWSER === 'safari') pinVerified = false;
       notice = { kind: 'error', text: errorText(e) };
     }
   }
@@ -172,6 +196,13 @@
 <main class="page">
   <h1>Settings</h1>
 
+  {#if import.meta.env.BROWSER === 'safari'}
+    <aside class="card pad small" aria-label="Safari limitation">
+      <p>{SAFARI_PRIVATE_LIMITATION}</p>
+      {#if app?.pinError}<p class="error" role="status">{app.pinError}</p>{/if}
+    </aside>
+  {/if}
+
   {#if loadError}
     <div class="card pad" role="alert">
       <p class="error">Couldn’t load your settings. {loadError}</p>
@@ -249,7 +280,7 @@
         <div>
           <span class="strong" id="pin-l">Pin default account</span>
           <span class="muted small" id="pin-d">
-            {app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.'}
+            {pinAttention ?? (app.prefs.pinEnabled ? 'On for the apps turned on below.' : 'Off. Google picks the account.')}
           </span>
         </div>
         <Toggle
@@ -300,6 +331,49 @@
       </table>
     </section>
 
+    {#if import.meta.env.BROWSER === 'safari'}
+      <section class="card" aria-labelledby="h-guide">
+        <div class="card-head">
+          <h2 id="h-guide">Reorder guide</h2>
+          <p>Choose where Safari shows the steps while you sign in to Google.</p>
+        </div>
+        <div class="pad">
+          <label>
+            Guide location
+            <select
+              value={app.prefs.safariGuideMode}
+              onchange={(e) => void save({ safariGuideMode: e.currentTarget.value === 'overlay' ? 'overlay' : 'window' })}
+            >
+              <option value="window">Guide window</option>
+              <option value="overlay">Sign-in overlay</option>
+            </select>
+          </label>
+        </div>
+      </section>
+    {/if}
+
+    <section class="card stats" aria-labelledby="h-stats">
+      <div class="card-head">
+        <h2 id="h-stats">Your numbers</h2>
+        <p>Uzero counts these on this computer and never sends them anywhere.</p>
+      </div>
+      {#if statList.length}
+        <dl>
+          {#each statList as row (row.id)}
+            <div>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          {/each}
+        </dl>
+        <div class="actions">
+          <button type="button" class="btn btn-text" onclick={resetStats}>Reset numbers</button>
+        </div>
+      {:else}
+        <p class="pad muted empty">Nothing yet. Once Pin opens a link or you switch a tab, the count starts here.</p>
+      {/if}
+    </section>
+
     <section class="card" aria-labelledby="h-backup">
       <div class="card-head">
         <h2 id="h-backup">Backup</h2>
@@ -328,11 +402,13 @@
     <section class="card" aria-labelledby="h-feedback">
       <div class="card-head">
         <h2 id="h-feedback">Feedback</h2>
-        <p>{stars ? `You gave Uzero ${stars} of 5.` : 'How is Uzero working for you?'}</p>
+        <p>{stars && !safariBuild ? `You gave Uzero ${stars} of 5.` : 'How is Uzero working for you?'}</p>
       </div>
-      <div class="rate">
-        <Stars value={stars} label="Rate Uzero" onpick={pickStars} />
-      </div>
+      {#if !safariBuild}
+        <div class="rate">
+          <Stars value={stars} label="Rate Uzero" onpick={pickStars} />
+        </div>
+      {/if}
       {#if path === 'review' && reviewUrl && store}
         <p class="rate-note" aria-live="polite">A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
       {:else if path === 'feedback'}
@@ -344,9 +420,6 @@
           <a class="btn btn-outlined" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
         {:else if path === 'feedback'}
           <a class="btn btn-filled" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
-          {#if reviewUrl && store}
-            <a class="btn btn-text" href={reviewUrl} target="_blank" rel="noreferrer">Review on the {STORE_NAMES[store]}</a>
-          {/if}
         {:else}
           <a class="btn btn-outlined" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
         {/if}
@@ -391,6 +464,7 @@
       </dl>
     </section>
   {/if}
+  <SiteLinks />
 </main>
 
 <style>
@@ -579,6 +653,11 @@
     opacity: 0.6;
   }
 
+  .empty {
+    margin: 0;
+    padding-top: 0;
+  }
+
   /* Feedback ------------------------------------------------------------ */
   .rate {
     padding: 0 18px 4px;
@@ -604,6 +683,26 @@
   }
   .notice.error {
     color: var(--error);
+  }
+
+  /* Your numbers -------------------------------------------------------- */
+  .stats dl {
+    margin: 0;
+  }
+  .stats dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--outline-variant);
+  }
+  .stats dd {
+    color: var(--on-surface);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .stats .actions {
+    padding-top: 8px;
   }
 
   /* How it works -------------------------------------------------------- */
@@ -643,7 +742,8 @@
     }
     .card-head,
     .pin-row,
-    .how dl > div {
+    .how dl > div,
+    .stats dl > div {
       padding-left: 16px;
       padding-right: 16px;
     }
