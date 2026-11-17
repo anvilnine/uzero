@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, WizardState } from './types';
 import {
-  inProgress, isActive, isExpired, LOGOUT_URL, reduce, reorderQueue, restoreToQueue, signInUrl, stepChanged, tabUrlFor,
-  WIZARD_TTL_MS,
+  addToQueue, inProgress, isActive, isExpired, LOGOUT_URL, placeAdded, reduce, reorderQueue, restoreToQueue, signInUrl,
+  stepChanged, tabUrlFor, WIZARD_TTL_MS,
 } from './wizard';
 
 const signedIn = (...emails: string[]): Account[] =>
@@ -300,6 +300,70 @@ describe('reorder list', () => {
     expect(restoreToQueue(['c@x.com'], all, 'a@x.com')).toEqual(['a@x.com', 'c@x.com']);
     expect(restoreToQueue([], all, 'b@x.com')).toEqual(['b@x.com']);
     expect(restoreToQueue(['b@x.com'], all, 'b@x.com')).toEqual(['b@x.com']);
+  });
+});
+
+describe('adding a new account', () => {
+  const all = ['a@x.com', 'b@x.com', 'c@x.com'];
+
+  it('lowercases a typed email and puts it last', () => {
+    expect(addToQueue(['a@x.com'], '  New@Example.COM ', all)).toEqual({
+      ok: true, queue: ['a@x.com', 'new@example.com'], email: 'new@example.com', restored: false,
+    });
+  });
+
+  it('rejects duplicates and things that are not emails', () => {
+    expect(addToQueue(['a@x.com'], 'A@X.com', all)).toEqual({ ok: false, reason: 'duplicate' });
+    expect(addToQueue(['a@x.com', 'new@example.com'], 'new@example.com', all)).toEqual({ ok: false, reason: 'duplicate' });
+    for (const bad of ['', 'new', 'new@', '@example.com', 'new@example', 'a b@example.com']) {
+      expect(addToQueue(['a@x.com'], bad, all)).toEqual({ ok: false, reason: 'invalid' });
+    }
+  });
+
+  it('typing a removed account adds it back at its place', () => {
+    expect(addToQueue(['a@x.com', 'c@x.com'], 'B@x.com', all)).toEqual({
+      ok: true, queue: ['a@x.com', 'b@x.com', 'c@x.com'], email: 'b@x.com', restored: true,
+    });
+  });
+
+  it('marks queue emails Google does not list as added, and forgets them when removed', () => {
+    let s = reduce(opened(), { type: 'queue', queue: ['b@x.com', 'new@example.com', 'a@x.com'], known: QUEUE })!;
+    expect(s).toMatchObject({ queue: ['b@x.com', 'new@example.com', 'a@x.com'], added: ['new@example.com'] });
+    s = reduce(s, { type: 'queue', queue: ['b@x.com', 'a@x.com'], known: QUEUE })!;
+    expect(s.added).toBeUndefined();
+    expect('added' in s).toBe(false);
+  });
+
+  it('asks for the new email as a step, and moves on when Google reports it signed in', () => {
+    let s = reduce(opened(), { type: 'queue', queue: ['b@x.com', 'new@example.com', 'a@x.com'], known: QUEUE })!;
+    s = reduce(s, { type: 'begin' })!;
+    s = reduce(s, { type: 'accounts', accounts: signedOut('a@x.com', 'b@x.com') })!;
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 1 });
+    expect(tabUrlFor(s)).toBe(signInUrl('new@example.com', false));
+    // Another account instead of the new one is still a wrong account.
+    expect(reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'a@x.com') })).toMatchObject({
+      phase: 'error', errorKind: 'wrong-account',
+    });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'new@example.com') })!;
+    expect(s).toMatchObject({ phase: 'signing-in', current: 2, completed: ['b@x.com', 'new@example.com'] });
+    s = reduce(s, { type: 'accounts', accounts: signedIn('b@x.com', 'new@example.com', 'a@x.com') })!;
+    expect(s).toMatchObject({ phase: 'done', added: ['new@example.com'] });
+  });
+
+  it('places a new account in the saved order at its spot in the reorder', () => {
+    // Google's list appended n@x.com to the saved order; the user put it second.
+    const queue = ['b@x.com', 'n@x.com', 'a@x.com'];
+    expect(placeAdded(['a@x.com', 'b@x.com', 'z@x.com', 'n@x.com'], queue, ['n@x.com'])).toEqual([
+      'a@x.com', 'b@x.com', 'n@x.com', 'z@x.com',
+    ]);
+    // First in the reorder: before the next one that is in the order.
+    expect(placeAdded(['a@x.com', 'n@x.com'], ['n@x.com', 'a@x.com'], ['n@x.com'])).toEqual(['n@x.com', 'a@x.com']);
+    // Nothing else from the reorder in the order: last.
+    expect(placeAdded(['z@x.com'], ['n@x.com'], ['n@x.com'])).toEqual(['z@x.com', 'n@x.com']);
+    // Two new ones keep their relative order; emails not in the reorder are ignored.
+    expect(placeAdded(['a@x.com', 'm@x.com', 'n@x.com'], ['n@x.com', 'm@x.com', 'a@x.com'], ['m@x.com', 'n@x.com', 'q@x.com']))
+      .toEqual(['n@x.com', 'm@x.com', 'a@x.com']);
   });
 });
 

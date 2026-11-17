@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { getApi, type Api } from '../../lib/api';
-  import { inProgress, reorderQueue, restoreToQueue } from '../../lib/wizard';
+  import { addToQueue, inProgress, reorderQueue, restoreToQueue } from '../../lib/wizard';
   import type { AppState, Request, WizardState } from '../../lib/types';
   import AskCard from '../../ui/AskCard.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
-  import { lineup, toneOf, type Row } from '../../ui/model';
+  import { lineup, move, toneOf, type Row } from '../../ui/model';
   import { closePanel, closeView, errorText } from '../../ui/nav';
 
   /** Narrow layout for the browser's side panel, next to Google's sign-in page. */
@@ -27,6 +27,11 @@
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   /** Short note for screen readers after a list edit (remove, add back). */
   let announce = $state('');
+  /** "Add an account" form, before starting. */
+  let adding = $state(false);
+  let draft = $state('');
+  let addError = $state<string | null>(null);
+  let addInput = $state<HTMLInputElement | null>(null);
 
   const w = $derived(app?.wizard ?? null);
   const rowsByEmail = $derived(new Map((app ? lineup(app) : []).map((r) => [r.email, r])));
@@ -231,6 +236,44 @@
     void editQueue(w.queue.filter((e) => e !== email), `Removed ${email}.`, `[data-restore="${CSS.escape(email)}"]`);
   }
 
+  async function openAdd() {
+    adding = true;
+    addError = null;
+    await tick();
+    addInput?.focus();
+  }
+
+  function closeAdd() {
+    adding = false;
+    draft = '';
+    addError = null;
+    void tick().then(() => (document.querySelector('[data-open-add]') as HTMLElement | null)?.focus());
+  }
+
+  async function addEmail(e: SubmitEvent) {
+    e.preventDefault();
+    if (!w) return;
+    const res = addToQueue(w.queue, draft, everyone);
+    if (!res.ok) {
+      addError = res.reason === 'duplicate' ? 'That account is already in the list.' : 'Enter a full email address.';
+      addInput?.focus();
+      return;
+    }
+    addError = null;
+    draft = '';
+    await editQueue(res.queue, res.restored ? `Added back ${res.email}.` : `Added ${res.email}.`, '#add-email');
+  }
+
+  /** Move a typed-in account up or down the list, keeping focus on the same button. */
+  function shift(email: string, by: -1 | 1) {
+    if (!w) return;
+    const from = w.queue.indexOf(email);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= w.queue.length) return;
+    const dir = by < 0 ? 'up' : 'down';
+    void editQueue(move(w.queue, from, to), `Moved ${email} to ${to + 1}.`, `[data-move-${dir}="${CSS.escape(email)}"]`);
+  }
+
   function addBack(email: string) {
     if (!w) return;
     void editQueue(restoreToQueue(w.queue, everyone, email), `Added back ${email}.`, `[data-remove="${CSS.escape(email)}"]`);
@@ -358,13 +401,42 @@
             <li>
               <span class="n">{i + 1}</span>
               <Avatar name={r.name} email={r.email} photo={r.account?.photo} tone={toneOf(r)} size={24} />
-              <span class="who">
-                <span class="who-name">{r.meta.label ?? r.name}</span>
-                <span class="who-email">{r.email}</span>
-                {#if r.account?.signedOut}
-                  <span class="who-note">Signed out. You’ll sign back in.</span>
-                {/if}
-              </span>
+              {#if w.added?.includes(r.email)}
+                <span class="who">
+                  <span class="who-name wrap">{r.email}</span>
+                  <span class="who-note">New. You’ll sign in.</span>
+                </span>
+                <span class="moves">
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-move-up={r.email}
+                    aria-label="Move {r.email} up"
+                    onclick={() => shift(r.email, -1)}
+                    disabled={!!pending || i === 0}
+                  >
+                    <Icon name="up" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-move-down={r.email}
+                    aria-label="Move {r.email} down"
+                    onclick={() => shift(r.email, 1)}
+                    disabled={!!pending || i === queueRows.length - 1}
+                  >
+                    <Icon name="down" size={18} />
+                  </button>
+                </span>
+              {:else}
+                <span class="who">
+                  <span class="who-name">{r.meta.label ?? r.name}</span>
+                  <span class="who-email">{r.email}</span>
+                  {#if r.account?.signedOut}
+                    <span class="who-note">Signed out. You’ll sign back in.</span>
+                  {/if}
+                </span>
+              {/if}
               <button
                 type="button"
                 class="btn btn-text row-btn"
@@ -379,7 +451,35 @@
           {/each}
         </ol>
       {:else}
-        <p class="empty">No accounts to sign back in. Add one back to start.</p>
+        <p class="empty">No accounts to sign back in. Add one to start.</p>
+      {/if}
+      {#if adding}
+        <form class="add" onsubmit={addEmail} novalidate>
+          <label for="add-email">Email address</label>
+          <div class="add-row">
+            <input
+              id="add-email"
+              class="field"
+              type="email"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="name@example.com"
+              bind:value={draft}
+              bind:this={addInput}
+              aria-invalid={addError ? 'true' : undefined}
+              aria-describedby={addError ? 'add-error' : undefined}
+              onkeydown={(e) => e.key === 'Escape' && closeAdd()}
+            />
+            <button type="submit" class="btn btn-tonal" disabled={!!pending}>Add</button>
+          </div>
+          {#if addError}<p class="add-error" id="add-error">{addError}</p>{/if}
+          <button type="button" class="btn btn-text add-done" onclick={closeAdd}>Done</button>
+        </form>
+      {:else}
+        <button type="button" class="btn btn-text add-open" data-open-add onclick={openAdd} disabled={!!pending}>
+          <Icon name="plus" size={18} />
+          Add an account
+        </button>
       {/if}
       {#if removedRows.length > 0}
         <h2 id="removed-heading">Removed</h2>
@@ -752,6 +852,61 @@
   }
   .removed .who-name {
     color: var(--on-surface-variant);
+  }
+  .who-name.wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .panel .order li {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .panel .row-btn {
+    padding: 0 8px;
+    margin-right: -8px;
+  }
+  .moves {
+    flex: none;
+    display: inline-flex;
+  }
+  .moves .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .moves .icon-btn:disabled {
+    opacity: 0.38;
+  }
+  .add-open {
+    display: flex;
+    margin: -12px 0 16px -12px;
+  }
+  .panel .add-open {
+    margin-left: -12px;
+  }
+  .add {
+    margin: -8px 0 24px;
+    text-align: left;
+  }
+  .add label {
+    display: block;
+    margin: 0 0 8px;
+    font-size: var(--t-sm);
+    font-weight: 500;
+  }
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+  .add-row .btn {
+    flex: none;
+  }
+  .add-error {
+    margin: 8px 0 0;
+    color: var(--error);
+    font-size: var(--t-sm);
+  }
+  .add-done {
+    margin: 4px 0 0 -12px;
   }
   .hint,
   .empty {

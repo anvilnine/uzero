@@ -1,13 +1,16 @@
 // Pure state machine for the real reorder wizard, plus the Google URLs it opens.
 // Side effects (tabs, storage) live in the background; this file only decides.
 import type { Account, WizardErrorKind, WizardState } from './types';
-import { sanitizeEmails } from './accounts';
+import { normalizeEmail, sanitizeEmails } from './accounts';
 
 export type WizardEvent =
   | { type: 'open'; queue: readonly string[]; now: number }
   | { type: 'begin' }
-  /** The user edited the list before starting (removed or added back accounts). Only in confirm. */
-  | { type: 'queue'; queue: readonly string[] }
+  /**
+   * The user edited the list before starting (removed, added back or typed in accounts). Only in
+   * confirm. `known`: emails Google lists; anything else in the queue is a new account.
+   */
+  | { type: 'queue'; queue: readonly string[]; known?: readonly string[] }
   /** Fresh ListAccounts result (a tick). */
   | { type: 'accounts'; accounts: readonly Account[] }
   | { type: 'skip' }
@@ -111,9 +114,16 @@ export function reduce(state: WizardState | null, ev: WizardEvent): WizardState 
     case 'touch':
       return isActive(state) ? { ...state, lastActivityAt: ev.now } : state;
 
-    case 'queue':
+    case 'queue': {
       if (state.phase !== 'confirm') return state;
-      return { ...state, queue: sanitizeEmails(ev.queue) };
+      const queue = sanitizeEmails(ev.queue);
+      const known = new Set(ev.known ?? queue);
+      const added = queue.filter((e) => !known.has(e));
+      const next: WizardState = { ...state, queue };
+      if (added.length > 0) next.added = added;
+      else delete next.added;
+      return next;
+    }
 
     case 'begin':
       if (state.phase !== 'confirm' && state.phase !== 'error') return state;
@@ -204,6 +214,42 @@ export function restoreToQueue(queue: readonly string[], all: readonly string[],
     if (pos >= 0) return [...queue.slice(0, pos + 1), email, ...queue.slice(pos + 1)];
   }
   return [email, ...queue];
+}
+
+export type AddResult =
+  | { ok: true; queue: string[]; email: string; restored: boolean }
+  | { ok: false; reason: 'invalid' | 'duplicate' };
+
+/**
+ * Add a typed email to the list. Lowercased and checked lightly. One already in the list is
+ * refused; a removed account goes back to its place; anything else goes last.
+ */
+export function addToQueue(queue: readonly string[], input: string, all: readonly string[]): AddResult {
+  const email = normalizeEmail(input);
+  if (!email) return { ok: false, reason: 'invalid' };
+  if (queue.includes(email)) return { ok: false, reason: 'duplicate' };
+  if (all.includes(email)) return { ok: true, queue: restoreToQueue(queue, all, email), email, restored: true };
+  return { ok: true, queue: [...queue, email], email, restored: false };
+}
+
+/**
+ * Put newly signed-in accounts the user typed in at their place in the saved order: right after
+ * the nearest earlier account of the reorder that is in the order, else before the nearest later
+ * one, else last. Other accounts keep their places.
+ */
+export function placeAdded(order: readonly string[], queue: readonly string[], emails: readonly string[]): string[] {
+  const moving = new Set(emails.filter((e) => queue.includes(e)));
+  const out = order.filter((e) => !moving.has(e));
+  for (const email of queue) {
+    if (!moving.has(email)) continue;
+    const at = queue.indexOf(email);
+    const before = queue.slice(0, at).reverse().find((e) => out.includes(e));
+    const after = queue.slice(at + 1).find((e) => out.includes(e));
+    if (before !== undefined) out.splice(out.indexOf(before) + 1, 0, email);
+    else if (after !== undefined) out.splice(out.indexOf(after), 0, email);
+    else out.push(email);
+  }
+  return out;
 }
 
 /** Sign out of every account, then stay on accounts.google.com so the wizard keeps its tab. */
