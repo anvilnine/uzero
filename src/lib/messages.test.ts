@@ -24,6 +24,9 @@ describe('parseRequest', () => {
     expect(parseRequest({ type: 'wizardOpen', queue: ['a@x.com'], panel: 'yes' })).toEqual({ type: 'wizardOpen', queue: ['a@x.com'] });
     expect(parseRequest({ type: 'wizardOpen', queue: [] })).toBeNull();
     expect(parseRequest({ type: 'wizardOpen', queue: 'a@x.com' })).toBeNull();
+    expect(parseRequest({ type: 'wizardQueue', queue: ['A@x.com', 'a@x.com', 'bad'] })).toEqual({ type: 'wizardQueue', queue: ['a@x.com'] });
+    expect(parseRequest({ type: 'wizardQueue', queue: [] })).toEqual({ type: 'wizardQueue', queue: [] });
+    expect(parseRequest({ type: 'wizardQueue' })).toBeNull();
     expect(parseRequest({ type: 'savePrefs', patch: { pinEnabled: true } })).toEqual({ type: 'savePrefs', patch: { pinEnabled: true } });
     expect(parseRequest({ type: 'savePrefs', patch: [] })).toBeNull();
     expect(parseRequest({ type: 'savePrefs' })).toBeNull();
