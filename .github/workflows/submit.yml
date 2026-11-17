@@ -68,7 +68,7 @@ jobs:
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.pick.outputs.run == 'true'
         with:
           ref: ${{ inputs.tag }}
