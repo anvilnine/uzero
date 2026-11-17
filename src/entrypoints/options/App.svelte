@@ -6,6 +6,7 @@
   import type { AppState, LabelColor, Prefs, ServiceInfo } from '../../lib/types';
   import Avatar from '../../ui/Avatar.svelte';
   import Toggle from '../../ui/Toggle.svelte';
+  import SiteLinks from '../../ui/SiteLinks.svelte';
   import { COLOR_NAMES, LABEL_COLORS, LABEL_MAX, cleanLabel, lineup, toneOf } from '../../ui/model';
   import { errorText } from '../../ui/nav';
   import { exportPrefs, parsePrefs } from '../../ui/prefsFile';
@@ -369,7 +370,7 @@
           <button type="button" class="btn btn-text" onclick={resetStats}>Reset numbers</button>
         </div>
       {:else}
-        <p class="pad muted">Nothing yet. Once Pin opens a link or you switch a tab, the count starts here.</p>
+        <p class="pad muted empty">Nothing yet. Once Pin opens a link or you switch a tab, the count starts here.</p>
       {/if}
     </section>
 
@@ -463,6 +464,7 @@
       </dl>
     </section>
   {/if}
+  <SiteLinks />
 </main>
 
 <style>
@@ -649,6 +651,11 @@
   }
   .services.off tbody {
     opacity: 0.6;
+  }
+
+  .empty {
+    margin: 0;
+    padding-top: 0;
   }
 
   /* Feedback ------------------------------------------------------------ */

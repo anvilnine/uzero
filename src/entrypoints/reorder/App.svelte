@@ -6,6 +6,7 @@
   import AskCard from '../../ui/AskCard.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
+  import SiteLinks from '../../ui/SiteLinks.svelte';
   import { lineup, toneOf, type Row } from '../../ui/model';
   import { closePanel, closeView, errorText } from '../../ui/nav';
 
@@ -520,6 +521,7 @@
       </button>
     </div>
   {/if}
+  {#if !embedded}<SiteLinks align={panel ? 'start' : 'center'} />{/if}
 </div>
 
 <style>
