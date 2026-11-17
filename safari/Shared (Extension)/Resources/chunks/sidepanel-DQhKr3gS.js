@@ -1,0 +1,1 @@
+import{J as e}from"./nav-DI5OyPdm.js";import{t}from"./App-B4LeTsfw.js";e(t,{target:document.getElementById(`app`),props:{panel:!0}});

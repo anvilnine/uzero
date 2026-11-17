@@ -1,1 +1,0 @@
-import{Y as e}from"./nav-5Jx6W06K.js";import{t}from"./App-CwxkdbAE.js";e(t,{target:document.getElementById(`app`),props:{panel:!0}});
