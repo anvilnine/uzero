@@ -9,6 +9,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
   import Toggle from '../../ui/Toggle.svelte';
+  import SiteLinks from '../../ui/SiteLinks.svelte';
   import AccountSheet from './AccountSheet.svelte';
   import { loadStats, pinLine } from '../../lib/stats';
   import {
@@ -572,6 +573,7 @@
       {/if}
     </footer>
   {/if}
+  <SiteLinks />
 
   <div class="toast" class:show={!!toast} role="status" aria-live="polite">{toast}</div>
   <div class="sr-only" aria-live="assertive">{announce}</div>
