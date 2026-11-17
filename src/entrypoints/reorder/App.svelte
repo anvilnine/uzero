@@ -3,6 +3,7 @@
   import { getApi, type Api } from '../../lib/api';
   import { inProgress } from '../../lib/wizard';
   import type { AppState, Request, WizardState } from '../../lib/types';
+  import AskCard from '../../ui/AskCard.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Icon from '../../ui/Icon.svelte';
   import { lineup, toneOf, type Row } from '../../ui/model';
@@ -468,6 +469,10 @@
           </li>
         {/each}
       </ol>
+
+      {#if matches}
+        <AskCard />
+      {/if}
 
       <div class="actions">
         {#if targets.length > 0 && !matches && !app.prefs.pinEnabled}
