@@ -5,7 +5,6 @@ import {
   EMPTY_ASK,
   detectStore,
   dismiss,
-  feedbackLink,
   rate,
   route,
   sanitizeAsk,
@@ -58,16 +57,6 @@ describe('detectStore', () => {
   });
   it('has no store for Safari', () => {
     expect(detectStore('safari', '')).toBeNull();
-  });
-});
-
-describe('feedbackLink', () => {
-  it('is empty without a form', () => {
-    expect(feedbackLink('', { env: 'prod', source: 'x' })).toBe('');
-  });
-  it('adds the hidden fields and no personal data', () => {
-    const u = new URL(feedbackLink('https://forms.zonily.cloud/form/abc', { env: 'prod', source: 'reorder-done', version: '0.1.0', locale: 'en-US' }));
-    expect(Object.fromEntries(u.searchParams)).toEqual({ app: 'uzero', env: 'prod', source: 'reorder-done', version: '0.1.0', locale: 'en-US' });
   });
 });
 

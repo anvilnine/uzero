@@ -9,8 +9,22 @@
   import { errorText } from '../../ui/nav';
   import { exportPrefs, parsePrefs } from '../../ui/prefsFile';
   import { FEATURE_REQUEST_URL, formLink, pageContext } from '../../lib/feedback';
+  import { FEEDBACK_URL, REVIEW_URLS, STORE_NAMES, detectStore, loadAsk, rate, route, saveAsk, type AskState } from '../../lib/ask';
+  import Stars from '../../ui/Stars.svelte';
 
   const featureUrl = formLink(FEATURE_REQUEST_URL, pageContext('options'));
+  const feedbackUrl = formLink(FEEDBACK_URL, pageContext('options')) || 'https://uzero.app/support/';
+  const store = detectStore(import.meta.env.BROWSER, typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  const reviewUrl = store ? REVIEW_URLS[store] : '';
+  // Same rating the reorder screen asks for. Here it is always reachable and can be changed.
+  let ask = $state<AskState | null>(null);
+  const stars = $derived(ask?.rating ?? 0);
+  const path = $derived(stars ? route(stars) : null);
+
+  async function pickStars(n: number) {
+    ask = rate(ask ?? (await loadAsk()), n);
+    await saveAsk(ask);
+  }
 
   let api: Api | null = null;
   let app = $state<AppState | null>(null);
@@ -31,6 +45,7 @@
   });
 
   onMount(() => {
+    void loadAsk().then((a) => (ask = a));
     let unsub = () => {};
     (async () => {
       try {
@@ -310,17 +325,36 @@
       {/if}
     </section>
 
-    {#if featureUrl}
-      <section class="card" aria-labelledby="h-ideas">
-        <div class="card-head">
-          <h2 id="h-ideas">Ideas</h2>
-          <p>Missing something? Tell us what would make Uzero better for you.</p>
-        </div>
-        <div class="actions">
-          <a class="btn btn-outlined" href={featureUrl} target="_blank" rel="noreferrer">Request a feature</a>
-        </div>
-      </section>
-    {/if}
+    <section class="card" aria-labelledby="h-feedback">
+      <div class="card-head">
+        <h2 id="h-feedback">Feedback</h2>
+        <p>{stars ? `You gave Uzero ${stars} of 5.` : 'How is Uzero working for you?'}</p>
+      </div>
+      <div class="rate">
+        <Stars value={stars} label="Rate Uzero" onpick={pickStars} />
+      </div>
+      {#if path === 'review' && reviewUrl && store}
+        <p class="rate-note" aria-live="polite">A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
+      {:else if path === 'feedback'}
+        <p class="rate-note" aria-live="polite">Tell me what went wrong. Leave an email if you want a reply.</p>
+      {/if}
+      <div class="actions">
+        {#if path === 'review' && reviewUrl}
+          <a class="btn btn-filled" href={reviewUrl} target="_blank" rel="noreferrer">Write a review</a>
+          <a class="btn btn-outlined" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
+        {:else if path === 'feedback'}
+          <a class="btn btn-filled" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
+          {#if reviewUrl && store}
+            <a class="btn btn-text" href={reviewUrl} target="_blank" rel="noreferrer">Review on the {STORE_NAMES[store]}</a>
+          {/if}
+        {:else}
+          <a class="btn btn-outlined" href={feedbackUrl} target="_blank" rel="noreferrer">Send feedback</a>
+        {/if}
+        {#if featureUrl}
+          <a class="btn btn-outlined" href={featureUrl} target="_blank" rel="noreferrer">Suggest a feature</a>
+        {/if}
+      </div>
+    </section>
 
     <section class="card how" aria-labelledby="h-how">
       <div class="card-head">
@@ -539,10 +573,21 @@
     height: 36px;
     border: 0;
     border-radius: var(--r-sm);
-    background: var(--surface);
+    background-color: var(--surface);
   }
   .services.off tbody {
     opacity: 0.6;
+  }
+
+  /* Feedback ------------------------------------------------------------ */
+  .rate {
+    padding: 0 18px 4px;
+  }
+  .rate-note {
+    margin: 0;
+    padding: 4px 24px 12px;
+    color: var(--on-surface-variant);
+    max-width: 62ch;
   }
 
   /* Backup -------------------------------------------------------------- */
