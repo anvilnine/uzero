@@ -73,7 +73,7 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.pick.outputs.run == 'true'
       - uses: actions/setup-node@v4
         if: steps.pick.outputs.run == 'true'
