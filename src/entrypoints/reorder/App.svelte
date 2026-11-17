@@ -405,7 +405,7 @@
               {#if w.added?.includes(r.email)}
                 <span class="who">
                   <span class="who-name wrap">{r.email.split('@')[0]}<wbr />@{r.email.split('@').slice(1).join('@')}</span>
-                  <span class="who-note">New. You’ll sign in.</span>
+                  <span class="who-note">New</span>
                 </span>
                 <span class="moves">
                   <button
@@ -434,7 +434,7 @@
                   <span class="who-name">{r.meta.label ?? r.name}</span>
                   <span class="who-email">{r.email}</span>
                   {#if r.account?.signedOut}
-                    <span class="who-note">Signed out. You’ll sign back in.</span>
+                    <span class="who-note">Signed out</span>
                   {/if}
                 </span>
               {/if}
@@ -452,7 +452,7 @@
           {/each}
         </ol>
       {:else}
-        <p class="empty">No accounts to sign back in. Add one to start.</p>
+        <p class="empty">No accounts yet.</p>
       {/if}
       {#if adding}
         <form class="add" onsubmit={addEmail} novalidate>
@@ -484,7 +484,6 @@
       {/if}
       {#if removedRows.length > 0}
         <h2 id="removed-heading">Removed</h2>
-        <p class="hint">They stay in Uzero. They won’t sign back in this time.</p>
         <ul class="order removed" aria-labelledby="removed-heading">
           {#each removedRows as r (r.email)}
             <li>
@@ -911,7 +910,6 @@
   .add-done {
     margin: 4px 0 0 -12px;
   }
-  .hint,
   .empty {
     margin: 0 0 12px;
     color: var(--on-surface-variant);

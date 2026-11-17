@@ -83,9 +83,8 @@
   <section class="ask" aria-live="polite">
     <h2>Glad it worked.</h2>
     {#if reviewUrl && store}
-      <p>A short review on the {STORE_NAMES[store]} helps other people find Uzero.</p>
       <div class="row">
-        <a class="btn btn-filled" href={reviewUrl} target="_blank" rel="noreferrer">Write a review</a>
+        <a class="btn btn-filled" href={reviewUrl} target="_blank" rel="noreferrer">Review on the {STORE_NAMES[store]}</a>
       </div>
     {/if}
     <p>Know someone with too many Google accounts?</p>
@@ -97,7 +96,6 @@
 {:else if path === 'feedback'}
   <section class="ask" aria-live="polite">
     <h2>Sorry about that.</h2>
-    <p>Tell me what went wrong. Leave an email if you want a reply.</p>
     <div class="row">
       <a class="btn btn-filled" href={feedbackUrl || 'https://uzero.app/support/'} target="_blank" rel="noreferrer">Send feedback</a>
     </div>
