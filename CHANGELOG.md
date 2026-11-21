@@ -4,6 +4,11 @@ What changed in each Uzero release, written for people who use it. uzero.app/rel
 
 Add a section for the next version before you run `scripts/release.sh`. The release workflow puts that section at the top of the GitHub release.
 
+## 1.3.1 (2026-11-21)
+
+- Fixed the toolbar popup opening too narrow to read account names.
+- On narrow screens, the reorder button moves below the status text.
+
 ## 0.1.3 (2026-11-18)
 
 - Reorder in Google now lists signed-out accounts too. Remove any account before you start.

@@ -593,11 +593,9 @@
 {/if}
 
 <style>
-  :global(html),
   :global(body) {
-    width: min(360px, 100vw);
-  }
-  :global(body) {
+    width: 360px;
+    max-width: 100%;
     overflow: hidden;
     background: var(--surface-container);
   }
@@ -965,12 +963,14 @@
   /* Footer ------------------------------------------------------------- */
   .foot {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding: 12px 8px 0 16px;
   }
   .foot p {
+    flex: 1 1 14ch;
     margin: 0;
     color: var(--on-surface-variant);
     font-size: var(--t-sm);
