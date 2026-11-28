@@ -1,8 +1,8 @@
-# Uzero — Terms of Use
+# Uzero Terms of Use
 
-**Effective date:** 2026-11-08
+**Effective date:** 2026-11-28
 
-> **Short version.** Uzero is free on Chrome, Edge and Firefox, and costs a small one-time price on Apple's App Store. Tips are optional and unlock nothing. Uzero comes "as is". You keep control of your Google accounts and passwords. A reorder signs you out of every Google account, so have your passwords and 2-Step Verification ready. If something goes wrong, our liability is limited as far as the law allows.
+> **Short version.** Uzero is free on Chrome, Edge and Firefox. The Safari version hasn't launched yet. Uzero comes "as is". You keep control of your Google accounts and passwords. A reorder signs you out of every Google account, so have your passwords and 2-Step Verification ready. If something goes wrong, our liability is limited as far as the law allows.
 
 These Terms are an agreement between you and anvilnine, the developer of Uzero ("we", "us"). They cover the Uzero browser extension, its updates and its documentation ("Uzero"). **When you install or use Uzero, you agree to these Terms.** If you do not agree, do not install or use Uzero.
 
@@ -72,11 +72,8 @@ The law of the country where anvilnine has its principal place of business contr
 ## 14. Prices, tips and refunds
 
 - **Browser stores.** Uzero is free on the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons. Every feature works without paying.
-- **App Store.** The Safari version for Mac, iPhone and iPad is sold on Apple's App Store for a one-time price. Apple sells it to you and handles payment, tax and refunds under Apple's own terms. To ask for a refund, use [reportaproblem.apple.com](https://reportaproblem.apple.com).
-- **Tips.** You can choose to support Uzero through Gumroad, Polar or Ko-fi, at any amount you pick. A tip is a voluntary payment to anvilnine, an independent developer. It is not a charitable donation and is not tax-deductible. It does not unlock features, faster support or any other benefit.
-- **Payment services.** Gumroad, Polar and Ko-fi process your payment under their own terms and privacy policies. We never see your card details.
-- **Tip refunds.** If you tipped by mistake, email [hello@anvilnine.com](mailto:hello@anvilnine.com) within 14 days and we will refund it. The payment service's own refund rules also apply.
-- **Your GPL-3.0 rights.** Paying does not add to your rights under the GPL-3.0, and not paying does not limit them.
+- **Safari.** We plan to charge US $4.99 once for Mac, iPhone and iPad together. The App Store will show the price in your region. Apple will handle payment and [refund requests](https://reportaproblem.apple.com).
+- **Tips.** We aren't accepting tips for Uzero. If you previously sent a tip by mistake, you can still request a refund by emailing [hello@anvilnine.com](mailto:hello@anvilnine.com) within 14 days of payment. We'll refund it under the terms that applied when you paid.
 
 ## 15. General
 
